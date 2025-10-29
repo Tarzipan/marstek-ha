@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek Batteriespeicher",
+        "description": "Konfigurieren Sie Ihr Marstek-Gerät.\n\n{discovery_info}",
+        "data": {
+          "device_ip": "Geräte-IP-Adresse",
+          "device_port": "Geräte-Port"
+        },
+        "data_description": {
+          "device_ip": "Geben Sie die IP-Adresse Ihres Marstek-Geräts ein (z.B. 192.168.2.178)",
+          "device_port": "UDP-Port für API-Kommunikation (Standard: 30000)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen.\n\nBitte überprüfen Sie:\n• IP-Adresse ist korrekt\n• Gerät ist eingeschaltet\n• Gerät ist im gleichen Netzwerk\n• Port 30000 (UDP) wird nicht von Firewall blockiert\n• Gerät verwendet UDP-Protokoll auf Port 30000\n\nPrüfen Sie die Home Assistant Logs für Details.",
+      "invalid_device": "Gerät verbunden, aber keine gültigen Informationen erhalten.\n\nDas Gerät könnte:\n• Kein Marstek-Gerät sein\n• Eine andere Protokollversion verwenden\n• Ein Firmware-Update benötigen\n\nPrüfen Sie die Home Assistant Logs für Details.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten.\n\nBitte prüfen Sie die Home Assistant Logs für Details."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek Optionen",
+        "description": "Konfigurieren Sie die Optionen für Ihr Marstek-Gerät."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_soc": {
+        "name": "Batterie Ladezustand"
+      },
+      "battery_voltage": {
+        "name": "Batterie Spannung"
+      },
+      "battery_current": {
+        "name": "Batterie Strom"
+      },
+      "battery_power": {
+        "name": "Batterie Leistung"
+      },
+      "battery_temperature": {
+        "name": "Batterie Temperatur"
+      },
+      "pv_voltage": {
+        "name": "PV Spannung"
+      },
+      "pv_current": {
+        "name": "PV Strom"
+      },
+      "pv_power": {
+        "name": "PV Leistung"
+      },
+      "es_power": {
+        "name": "Energiespeicher Leistung"
+      },
+      "es_energy_today": {
+        "name": "Energie Heute"
+      },
+      "es_energy_total": {
+        "name": "Energie Gesamt"
+      },
+      "grid_power": {
+        "name": "Netz Leistung"
+      },
+      "load_power": {
+        "name": "Last Leistung"
+      },
+      "wifi_rssi": {
+        "name": "WLAN Signalstärke"
+      }
+    },
+    "select": {
+      "es_mode": {
+        "name": "Energiespeicher Modus",
+        "state": {
+          "self_use": "Eigenverbrauch",
+          "time_of_use": "Zeitabhängig",
+          "backup": "Backup",
+          "off_grid": "Inselbetrieb"
+        }
+      }
+    }
+  }
+}

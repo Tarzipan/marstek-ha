@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek Battery Storage",
+        "description": "Configure your Marstek device.\n\n{discovery_info}",
+        "data": {
+          "device_ip": "Device IP Address",
+          "device_port": "Device Port"
+        },
+        "data_description": {
+          "device_ip": "Enter the IP address of your Marstek device (e.g., 192.168.2.178)",
+          "device_port": "UDP port for API communication (default: 30000)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device.\n\nPlease check:\n• IP address is correct\n• Device is powered on\n• Device is on the same network\n• Port 30000 (UDP) is not blocked by firewall\n• Device uses UDP protocol on port 30000\n\nCheck Home Assistant logs for details.",
+      "invalid_device": "Device connected but did not return valid information.\n\nThe device might:\n• Not be a Marstek device\n• Use a different protocol version\n• Require firmware update\n\nCheck Home Assistant logs for details.",
+      "unknown": "An unexpected error occurred.\n\nPlease check Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek Options",
+        "description": "Configure options for your Marstek device."
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "battery_soc": {
+        "name": "Battery State of Charge"
+      },
+      "battery_voltage": {
+        "name": "Battery Voltage"
+      },
+      "battery_current": {
+        "name": "Battery Current"
+      },
+      "battery_power": {
+        "name": "Battery Power"
+      },
+      "battery_temperature": {
+        "name": "Battery Temperature"
+      },
+      "pv_voltage": {
+        "name": "PV Voltage"
+      },
+      "pv_current": {
+        "name": "PV Current"
+      },
+      "pv_power": {
+        "name": "PV Power"
+      },
+      "es_power": {
+        "name": "Energy Storage Power"
+      },
+      "es_energy_today": {
+        "name": "Energy Today"
+      },
+      "es_energy_total": {
+        "name": "Energy Total"
+      },
+      "grid_power": {
+        "name": "Grid Power"
+      },
+      "load_power": {
+        "name": "Load Power"
+      },
+      "wifi_rssi": {
+        "name": "WiFi Signal Strength"
+      }
+    },
+    "select": {
+      "es_mode": {
+        "name": "Energy Storage Mode",
+        "state": {
+          "self_use": "Self Use",
+          "time_of_use": "Time of Use",
+          "backup": "Backup",
+          "off_grid": "Off Grid"
+        }
+      }
+    }
+  }
+}
