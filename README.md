@@ -26,10 +26,10 @@ Diese Integration ermöglicht die Überwachung und Steuerung des Marstek VenusE 
 
 ### Schritt 1: Integration kopieren
 
-Kopieren Sie den Ordner `custom_components/marstek` in Ihr Home Assistant `custom_components` Verzeichnis:
+Kopieren Sie den Ordner `custom_components/marstek_ha` in Ihr Home Assistant `custom_components` Verzeichnis:
 
 ```
-~/.homeassistant/custom_components/marstek/
+~/.homeassistant/custom_components/marstek_ha/
 ```
 
 ### Schritt 2: Home Assistant neu starten
