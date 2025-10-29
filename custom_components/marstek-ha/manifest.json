@@ -1,5 +1,5 @@
 {
-  "domain": "marstek",
+  "domain": "marstek-ha",
   "name": "Marstek Battery Storage",
   "codeowners": ["@Tarzipan"],
   "config_flow": true,
