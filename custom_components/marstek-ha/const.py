@@ -1,6 +1,6 @@
 """Constants for the Marstek integration."""
 
-DOMAIN = "marstek"
+DOMAIN = "marstek"  # Note: Folder is marstek-ha, but domain is marstek
 
 # Configuration
 CONF_DEVICE_IP = "device_ip"

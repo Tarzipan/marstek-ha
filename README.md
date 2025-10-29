@@ -106,9 +106,6 @@ Die Integration wird vollständig über die Home Assistant UI konfiguriert. Es i
 - ✅ 20 Entitäten (Sensoren, Binary Sensoren, Select)
 - ✅ Automatische Datenaktualisierung alle 30 Sekunden
 - ✅ Energiespeicher-Modus-Steuerung
-- ✅ Einfache manuelle IP-Konfiguration
-- ✅ Sauberes Logging ohne Debug-Informationen
-- ✅ Keine privaten Daten in der Integration
 
 **Bekannte Limitierungen:**
 
