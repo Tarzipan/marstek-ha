@@ -37,7 +37,7 @@ BINARY_SENSOR_TYPES: tuple[MarstekBinarySensorEntityDescription, ...] = (
     MarstekBinarySensorEntityDescription(
         key="battery_charging_allowed",
         name="Battery Charging Allowed",
-        device_class=BinarySensorDeviceClass.BATTERY_CHARGING,
+        device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-charging-check",
         value_fn=lambda data: data.get("battery", {}).get("charg_flag"),
     ),

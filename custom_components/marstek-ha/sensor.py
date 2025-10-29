@@ -90,26 +90,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         # ongrid_power: negative = feeding to grid, positive = consuming from grid
         value_fn=lambda data: data.get("es_mode", {}).get("ongrid_power") if isinstance(data.get("es_mode"), dict) else None,
     ),
-    MarstekSensorEntityDescription(
-        key="grid_feed_in_power",
-        name="Grid Feed-in Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-export",
-        # Only positive values when feeding to grid (ongrid_power < 0)
-        value_fn=lambda data: abs(data.get("es_mode", {}).get("ongrid_power")) if isinstance(data.get("es_mode"), dict) and data.get("es_mode", {}).get("ongrid_power", 0) < 0 else 0,
-    ),
-    MarstekSensorEntityDescription(
-        key="grid_consumption_power",
-        name="Grid Consumption Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:transmission-tower-import",
-        # Only positive values when consuming from grid (ongrid_power > 0)
-        value_fn=lambda data: data.get("es_mode", {}).get("ongrid_power") if isinstance(data.get("es_mode"), dict) and data.get("es_mode", {}).get("ongrid_power", 0) > 0 else 0,
-    ),
+
     MarstekSensorEntityDescription(
         key="battery_charging_power",
         name="Battery Charging Power",

@@ -14,7 +14,7 @@ Diese Integration ermöglicht die Überwachung und Steuerung des Marstek VenusE 
 - **Energiespeicher-Modus-Steuerung** (Auto, AI, Manual, Passive)
 - **Automatische Datenaktualisierung** alle 30 Sekunden
 - **UDP-basierte Kommunikation** mit lokalem Port-Binding
-- **20 Entitäten** (17 Sensoren + 2 Binary Sensoren + 1 Select)
+- **18 Entitäten** (15 Sensoren + 2 Binary Sensoren + 1 Select)
 
 ## 📋 Anforderungen
 
@@ -26,10 +26,10 @@ Diese Integration ermöglicht die Überwachung und Steuerung des Marstek VenusE 
 
 ### Schritt 1: Integration kopieren
 
-Kopieren Sie den Ordner `custom_components/marstek-ha` in Ihr Home Assistant `custom_components` Verzeichnis:
+Kopieren Sie den Ordner `custom_components/marstek` in Ihr Home Assistant `custom_components` Verzeichnis:
 
 ```
-~/.homeassistant/custom_components/marstek-ha/
+~/.homeassistant/custom_components/marstek/
 ```
 
 ### Schritt 2: Home Assistant neu starten
@@ -48,9 +48,9 @@ Starten Sie Home Assistant neu, damit die Integration erkannt wird.
 
 ### Schritt 4: Entitäten überprüfen
 
-Nach erfolgreicher Konfiguration sollten 20 Entitäten in Home Assistant verfügbar sein:
+Nach erfolgreicher Konfiguration sollten 18 Entitäten in Home Assistant verfügbar sein:
 
-- **17 Sensoren** (Batterie, Netzwerk, Energie)
+- **15 Sensoren** (Batterie, Netzwerk, Energie)
 - **2 Binary Sensoren** (Laden/Entladen erlaubt)
 - **1 Select-Entität** (Energiespeicher-Modus)
 
@@ -68,8 +68,6 @@ Nach erfolgreicher Konfiguration sollten 20 Entitäten in Home Assistant verfüg
 ### Netzwerk-Sensoren
 
 - Grid Power (W)
-- Grid Feed-in Power (W)
-- Grid Consumption Power (W)
 
 ### Batterie-Lade-/Entlade-Sensoren
 
@@ -103,7 +101,7 @@ Die Integration wird vollständig über die Home Assistant UI konfiguriert. Es i
 **Features:**
 
 - ✅ Vollständige UDP-basierte Kommunikation mit Marstek VenusE 3.0
-- ✅ 20 Entitäten (Sensoren, Binary Sensoren, Select)
+- ✅ 18 Entitäten (Sensoren, Binary Sensoren, Select)
 - ✅ Automatische Datenaktualisierung alle 30 Sekunden
 - ✅ Energiespeicher-Modus-Steuerung
 
