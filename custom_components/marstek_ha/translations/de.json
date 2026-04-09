@@ -12,6 +12,14 @@
           "device_ip": "Geben Sie die IP-Adresse Ihres Marstek-Ger\u00e4ts ein (z.B. 192.168.2.178)",
           "device_port": "UDP-Port f\u00fcr API-Kommunikation (Standard: 30000)"
         }
+      },
+      "reconfigure": {
+        "title": "Marstek-Ger\u00e4t neu konfigurieren",
+        "description": "Aktualisieren Sie die Verbindungseinstellungen f\u00fcr Ihr Marstek-Ger\u00e4t.",
+        "data": {
+          "device_ip": "Ger\u00e4te-IP-Adresse",
+          "device_port": "Ger\u00e4te-Port"
+        }
       }
     },
     "error": {
@@ -20,7 +28,8 @@
       "unknown": "Ein unerwarteter Fehler ist aufgetreten.\n\nBitte pr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details."
     },
     "abort": {
-      "already_configured": "Dieses Ger\u00e4t ist bereits konfiguriert."
+      "already_configured": "Dieses Ger\u00e4t ist bereits konfiguriert.",
+      "reconfigure_successful": "Konfiguration erfolgreich aktualisiert."
     }
   },
   "entity": {

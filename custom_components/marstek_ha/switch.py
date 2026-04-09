@@ -75,7 +75,8 @@ class MarstekSwitch(CoordinatorEntity[MarstekDataUpdateCoordinator], SwitchEntit
         """Initialize the switch."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}_switch"
+        device_id = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{device_id}_{description.key}_switch"
         self._assumed_state: bool | None = None
 
         device_data = coordinator.data.get("device") or {}
@@ -83,7 +84,7 @@ class MarstekSwitch(CoordinatorEntity[MarstekDataUpdateCoordinator], SwitchEntit
         firmware_ver = device_data.get("ver", "Unknown")
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
+            identifiers={(DOMAIN, device_id)},
             name=entry.title,
             manufacturer="Marstek",
             model=device_name,

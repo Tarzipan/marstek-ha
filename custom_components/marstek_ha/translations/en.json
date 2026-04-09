@@ -12,6 +12,14 @@
           "device_ip": "Enter the IP address of your Marstek device (e.g., 192.168.2.178)",
           "device_port": "UDP port for API communication (default: 30000)"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Marstek Device",
+        "description": "Update the connection settings for your Marstek device.",
+        "data": {
+          "device_ip": "Device IP Address",
+          "device_port": "Device Port"
+        }
       }
     },
     "error": {
@@ -20,7 +28,8 @@
       "unknown": "An unexpected error occurred.\n\nPlease check Home Assistant logs for details."
     },
     "abort": {
-      "already_configured": "This device is already configured."
+      "already_configured": "This device is already configured.",
+      "reconfigure_successful": "Configuration updated successfully."
     }
   },
   "entity": {

@@ -96,14 +96,15 @@ class MarstekBinarySensor(CoordinatorEntity[MarstekDataUpdateCoordinator], Binar
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        device_id = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{device_id}_{description.key}"
 
         device_data = coordinator.data.get("device") or {}
         device_name = device_data.get("device", "Unknown")
         firmware_ver = device_data.get("ver", "Unknown")
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
+            identifiers={(DOMAIN, device_id)},
             name=entry.title,
             manufacturer="Marstek",
             model=device_name,

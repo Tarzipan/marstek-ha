@@ -75,9 +75,8 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY_STORAGE,
         state_class=SensorStateClass.MEASUREMENT,
-        # Note: VenusE may report bat_capacity scaled by 0.1 (e.g. 25.6 = 256 Wh).
-        # The API doc example shows 256.0 directly. Keeping *10 based on real device data.
-        value_fn=lambda data: _safe_get(data, "battery", "bat_capacity") * 10.0 if _safe_get(data, "battery", "bat_capacity") is not None else None,
+        # bat_capacity is reported directly in Wh per API docs
+        value_fn=lambda data: _safe_get(data, "battery", "bat_capacity"),
     ),
     MarstekSensorEntityDescription(
         key="battery_rated_capacity",
@@ -274,14 +273,15 @@ class MarstekSensor(CoordinatorEntity[MarstekDataUpdateCoordinator], SensorEntit
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._attr_unique_id = f"{entry.entry_id}_{description.key}"
+        device_id = entry.unique_id or entry.entry_id
+        self._attr_unique_id = f"{device_id}_{description.key}"
 
         device_data = coordinator.data.get("device") or {}
         device_name = device_data.get("device", "Unknown")
         firmware_ver = device_data.get("ver", "Unknown")
 
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
+            identifiers={(DOMAIN, device_id)},
             name=entry.title,
             manufacturer="Marstek",
             model=device_name,

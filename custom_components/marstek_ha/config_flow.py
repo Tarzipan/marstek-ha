@@ -8,8 +8,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import config_validation as cv
 
@@ -24,32 +23,25 @@ from .marstek_api import MarstekAPI
 _LOGGER = logging.getLogger(__name__)
 
 
-async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
-    host = data[CONF_DEVICE_IP]
-    port = data.get(CONF_DEVICE_PORT, DEFAULT_PORT)
+async def _async_test_connection(host: str, port: int) -> dict[str, Any]:
+    """Test connection to device and return device info.
 
+    Raises CannotConnect or InvalidDevice on failure.
+    """
     api = MarstekAPI(host, port, port)
 
     try:
-        # connect() already calls get_device_info() internally to verify
         if not await api.connect():
             raise CannotConnect("Failed to connect to device")
 
-        # Fetch device info for metadata (connect verified reachability,
-        # but we need the response data for unique ID and title)
         device_info = await api.get_device_info()
 
         if not device_info:
             raise InvalidDevice("Device connected but did not return valid information")
 
-        device_name = device_info.get("device", "Marstek Device")
-        ble_mac = device_info.get("ble_mac", "unknown")
-
         return {
-            "title": device_name,
-            "serial": ble_mac,
-            "model": device_name,
+            "title": device_info.get("device", "Marstek Device"),
+            "serial": device_info.get("ble_mac", "unknown"),
         }
     except (CannotConnect, InvalidDevice):
         raise
@@ -66,7 +58,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Marstek."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -76,12 +68,15 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                info = await validate_input(self.hass, user_input)
+                info = await _async_test_connection(
+                    user_input[CONF_DEVICE_IP],
+                    user_input.get(CONF_DEVICE_PORT, DEFAULT_PORT),
+                )
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except InvalidDevice:
                 errors["base"] = "invalid_device"
-            except Exception:  # pylint: disable=broad-except
+            except Exception:
                 _LOGGER.exception("Unexpected exception during validation")
                 errors["base"] = "unknown"
             else:
@@ -93,7 +88,6 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
-        # Show manual configuration form
         data_schema = vol.Schema(
             {
                 vol.Required(CONF_DEVICE_IP): str,
@@ -107,6 +101,51 @@ class MarstekConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of the device IP/port."""
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        assert entry is not None
+
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            try:
+                await _async_test_connection(
+                    user_input[CONF_DEVICE_IP],
+                    user_input.get(CONF_DEVICE_PORT, DEFAULT_PORT),
+                )
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except InvalidDevice:
+                errors["base"] = "invalid_device"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure validation")
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry,
+                    data={**entry.data, **user_input},
+                )
+
+        data_schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_DEVICE_IP, default=entry.data.get(CONF_DEVICE_IP, "")
+                ): str,
+                vol.Optional(
+                    CONF_DEVICE_PORT, default=entry.data.get(CONF_DEVICE_PORT, DEFAULT_PORT)
+                ): cv.port,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=data_schema,
+            errors=errors,
+        )
+
 
 class CannotConnect(Exception):
     """Error to indicate we cannot connect."""
@@ -114,4 +153,3 @@ class CannotConnect(Exception):
 
 class InvalidDevice(Exception):
     """Error to indicate the device is invalid or not responding correctly."""
-

@@ -51,6 +51,15 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if all(v is None for v in data.values()):
             raise UpdateFailed("All API calls failed - device may be unreachable")
 
+        # Merge with previous data: keep last known good values for failed calls
+        if self.data:
+            for key, value in data.items():
+                if value is None and self.data.get(key) is not None:
+                    _LOGGER.debug(
+                        "Keeping previous data for '%s' (current call returned None)", key
+                    )
+                    data[key] = self.data[key]
+
         return data
 
     async def async_set_es_mode(self, mode: str) -> bool:
