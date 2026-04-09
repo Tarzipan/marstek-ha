@@ -276,7 +276,7 @@ class MarstekSensor(CoordinatorEntity[MarstekDataUpdateCoordinator], SensorEntit
         self.entity_description = description
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
 
-        device_data = coordinator.data.get("device", {})
+        device_data = coordinator.data.get("device") or {}
         device_name = device_data.get("device", "Unknown")
         firmware_ver = device_data.get("ver", "Unknown")
 
