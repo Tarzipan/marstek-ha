@@ -28,34 +28,37 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     """Validate the user input allows us to connect."""
     host = data[CONF_DEVICE_IP]
     port = data.get(CONF_DEVICE_PORT, DEFAULT_PORT)
-    local_port = port  # Use same port for local binding
 
-    api = MarstekAPI(host, port, local_port)
+    api = MarstekAPI(host, port, port)
 
     try:
+        # connect() already calls get_device_info() internally to verify
         if not await api.connect():
             raise CannotConnect("Failed to connect to device")
 
+        # Fetch device info for metadata (connect verified reachability,
+        # but we need the response data for unique ID and title)
         device_info = await api.get_device_info()
 
         if not device_info:
             raise InvalidDevice("Device connected but did not return valid information")
 
-        # Extract device name from response
         device_name = device_info.get("device", "Marstek Device")
         ble_mac = device_info.get("ble_mac", "unknown")
 
         return {
             "title": device_name,
-            "serial": ble_mac,  # Use BLE MAC as serial
+            "serial": ble_mac,
             "model": device_name,
         }
-    except asyncio.TimeoutError:
-        raise CannotConnect("Connection timeout")
-    except ConnectionRefusedError:
-        raise CannotConnect("Connection refused")
+    except (CannotConnect, InvalidDevice):
+        raise
+    except asyncio.TimeoutError as err:
+        raise CannotConnect("Connection timeout") from err
+    except ConnectionRefusedError as err:
+        raise CannotConnect("Connection refused") from err
     except OSError as err:
-        raise CannotConnect(f"Network error: {err}")
+        raise CannotConnect(f"Network error: {err}") from err
     finally:
         await api.disconnect()
 

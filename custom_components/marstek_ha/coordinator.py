@@ -30,7 +30,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.api = MarstekAPI(
             entry.data[CONF_DEVICE_IP],
             port,
-            port,  # Use same port for local binding
+            port,
         )
         self.entry = entry
 
@@ -45,16 +45,22 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Fetch data from API."""
         try:
             data = await self.api.get_all_data()
-
-            if not data:
-                raise UpdateFailed("Failed to fetch data from device")
-
-            return data
-
         except Exception as err:
             raise UpdateFailed(f"Error communicating with device: {err}") from err
+
+        # Check if all API calls failed (dict with all None values)
+        if all(v is None for v in data.values()):
+            raise UpdateFailed("All API calls failed - device may be unreachable")
+
+        return data
+
+    async def async_set_es_mode(self, mode: str) -> bool:
+        """Set the energy storage mode via the API."""
+        result = await self.api.set_es_mode(mode)
+        if result:
+            await self.async_request_refresh()
+        return result
 
     async def async_shutdown(self) -> None:
         """Shutdown the coordinator."""
         await self.api.disconnect()
-

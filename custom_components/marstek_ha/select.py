@@ -7,6 +7,8 @@ from typing import Any
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -44,28 +46,25 @@ class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], Selec
         self._attr_unique_id = f"{entry.entry_id}_es_mode"
         self._attr_options = ES_MODES
 
-        # Get device info from coordinator data
-        device_info = coordinator.data.get("device", {})
-        device_name = device_info.get("device", "Unknown")
-        firmware_ver = device_info.get("ver", "Unknown")
+        device_data = coordinator.data.get("device", {})
+        device_name = device_data.get("device", "Unknown")
+        firmware_ver = device_data.get("ver", "Unknown")
 
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": entry.title,
-            "manufacturer": "Marstek",
-            "model": device_name,
-            "sw_version": str(firmware_ver),
-        }
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=entry.title,
+            manufacturer="Marstek",
+            model=device_name,
+            sw_version=str(firmware_ver),
+        )
 
     @property
     def current_option(self) -> str | None:
         """Return the current selected option."""
         es_mode_data = self.coordinator.data.get("es_mode")
 
-        # es_mode can be a dict or None
         if isinstance(es_mode_data, dict):
             mode = es_mode_data.get("mode")
-
             if mode in ES_MODES:
                 return mode
 
@@ -74,18 +73,13 @@ class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], Selec
     async def async_select_option(self, option: str) -> None:
         """Change the selected option."""
         if option not in ES_MODES:
-            _LOGGER.error("Invalid ES mode: %s", option)
-            return
+            raise HomeAssistantError(f"Invalid ES mode: {option}")
 
-        _LOGGER.info("Attempting to set ES mode to: %s", option)
-        result = await self.coordinator.api.set_es_mode(option)
+        _LOGGER.debug("Setting ES mode to: %s", option)
+        result = await self.coordinator.async_set_es_mode(option)
 
-        if result:
-            _LOGGER.info("Successfully set ES mode to: %s", option)
-            # Request immediate update
-            await self.coordinator.async_request_refresh()
-        else:
-            _LOGGER.error("Failed to set ES mode to %s", option)
+        if not result:
+            raise HomeAssistantError(f"Failed to set ES mode to {option}")
 
     @property
     def available(self) -> bool:
@@ -94,4 +88,3 @@ class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], Selec
             self.coordinator.last_update_success
             and self.current_option is not None
         )
-
