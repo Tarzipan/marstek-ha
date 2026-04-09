@@ -48,7 +48,6 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception as err:
             raise UpdateFailed(f"Error communicating with device: {err}") from err
 
-        # Check if all API calls failed (dict with all None values)
         if all(v is None for v in data.values()):
             raise UpdateFailed("All API calls failed - device may be unreachable")
 
@@ -57,6 +56,27 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_set_es_mode(self, mode: str) -> bool:
         """Set the energy storage mode via the API."""
         result = await self.api.set_es_mode(mode)
+        if result:
+            await self.async_request_refresh()
+        return result
+
+    async def async_set_dod(self, value: int) -> bool:
+        """Set the depth of discharge via the API."""
+        result = await self.api.set_dod(value)
+        if result:
+            await self.async_request_refresh()
+        return result
+
+    async def async_set_ble_adv(self, enable: bool) -> bool:
+        """Enable or disable Bluetooth advertising."""
+        result = await self.api.set_ble_adv(enable)
+        if result:
+            await self.async_request_refresh()
+        return result
+
+    async def async_set_led(self, state: bool) -> bool:
+        """Control the LED on/off."""
+        result = await self.api.set_led(state)
         if result:
             await self.async_request_refresh()
         return result

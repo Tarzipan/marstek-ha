@@ -9,9 +9,14 @@ from typing import Any
 
 from .const import (
     CMD_BAT_STATUS,
+    CMD_BLE_ADV,
+    CMD_DOD_SET,
+    CMD_EM_STATUS,
     CMD_ES_GET_MODE,
     CMD_ES_SET_MODE,
+    CMD_ES_STATUS,
     CMD_GET_DEVICE,
+    CMD_LED_CTRL,
     DEFAULT_PORT,
     DEFAULT_TIMEOUT,
 )
@@ -87,10 +92,17 @@ class MarstekAPI:
                 _LOGGER.error("Cannot send command '%s': socket creation failed", command)
                 return None
 
+        # Default params: ble_mac for GetDevice, id for everything else
+        if params is None:
+            if command == CMD_GET_DEVICE:
+                params = {"ble_mac": "0"}
+            else:
+                params = {"id": 0}
+
         request = {
             "id": 1,
             "method": command,
-            "params": params or {"ble_mac": "0"},
+            "params": params,
         }
 
         message = json.dumps(request, separators=(',', ':')).encode('utf-8')
@@ -135,7 +147,6 @@ class MarstekAPI:
                 "ConnectionResetError for '%s': port %s appears closed on %s",
                 command, self.port, self.host,
             )
-            # Socket is likely broken after ICMP error, recreate on next call
             self._close_socket()
             return None
         except json.JSONDecodeError as err:
@@ -143,27 +154,38 @@ class MarstekAPI:
             return None
         except OSError as err:
             _LOGGER.error("Socket error sending '%s': %s", command, err)
-            # Socket may be broken, recreate on next call
             self._close_socket()
             return None
 
+    # --- Query commands ---
+
     async def get_device_info(self) -> dict[str, Any] | None:
-        """Get device information."""
+        """Get device information (Marstek.GetDevice)."""
         return await self._send_command(CMD_GET_DEVICE)
 
     async def get_battery_status(self) -> dict[str, Any] | None:
-        """Get battery status."""
-        return await self._send_command(CMD_BAT_STATUS, {"id": 0})
+        """Get battery status (Bat.GetStatus)."""
+        return await self._send_command(CMD_BAT_STATUS)
 
     async def get_es_mode(self) -> dict[str, Any] | None:
-        """Get energy storage mode and all related data."""
-        return await self._send_command(CMD_ES_GET_MODE, {"id": 0})
+        """Get energy storage mode and realtime data (ES.GetMode)."""
+        return await self._send_command(CMD_ES_GET_MODE)
+
+    async def get_es_status(self) -> dict[str, Any] | None:
+        """Get energy storage status and statistics (ES.GetStatus)."""
+        return await self._send_command(CMD_ES_STATUS)
+
+    async def get_em_status(self) -> dict[str, Any] | None:
+        """Get energy meter / CT status (EM.GetStatus)."""
+        return await self._send_command(CMD_EM_STATUS)
+
+    # --- Control commands ---
 
     async def set_es_mode(self, mode: str, config: dict[str, Any] | None = None) -> bool:
-        """Set energy storage mode.
+        """Set energy storage mode (ES.SetMode).
 
         Args:
-            mode: Mode name (Auto, AI, Manual, Passive)
+            mode: Mode name (Auto, AI, Manual, Passive, UPS)
             config: Optional mode-specific configuration
 
         Returns:
@@ -185,34 +207,79 @@ class MarstekAPI:
                 "end_time": "20:30",
                 "week_set": 127,
                 "power": 100,
-                "enable": 1
+                "enable": 1,
             })
         elif mode == "Passive":
             mode_config["passive_cfg"] = config.get("passive_cfg", {
                 "power": 100,
-                "cd_time": 300
+                "cd_time": 300,
             })
+        elif mode == "UPS":
+            mode_config["ups_cfg"] = config.get("ups_cfg", {"enable": 1})
 
         params = {
-            "id": 1,
-            "config": mode_config
+            "id": 0,
+            "config": mode_config,
         }
 
         result = await self._send_command(CMD_ES_SET_MODE, params)
         return bool(result and result.get("set_result") is True)
 
+    async def set_dod(self, value: int) -> bool:
+        """Set depth of discharge (DOD.SET).
+
+        Args:
+            value: DOD value (range 30-88)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        result = await self._send_command(CMD_DOD_SET, {"value": value})
+        return bool(result and result.get("set_result") is True)
+
+    async def set_ble_adv(self, enable: bool) -> bool:
+        """Enable or disable Bluetooth advertising (Ble.Adv).
+
+        Args:
+            enable: True to enable, False to disable
+
+        Returns:
+            True if successful, False otherwise
+        """
+        # API: 0 = enable, 1 = disable (inverted logic per docs)
+        result = await self._send_command(CMD_BLE_ADV, {"enable": 0 if enable else 1})
+        return bool(result and result.get("set_result") is True)
+
+    async def set_led(self, state: bool) -> bool:
+        """Control LED on/off (Led.Ctrl).
+
+        Args:
+            state: True for on, False for off
+
+        Returns:
+            True if successful, False otherwise
+        """
+        result = await self._send_command(CMD_LED_CTRL, {"state": 1 if state else 0})
+        return bool(result and result.get("set_result") is True)
+
+    # --- Bulk data fetch ---
+
     async def get_all_data(self) -> dict[str, Any]:
         """Get all data from the device.
 
-        Only fetches data from commands that are known to work with VenusE 3.0:
+        Fetches data from all query commands supported by Venus C/E:
         - Marstek.GetDevice
         - Bat.GetStatus
-        - ES.GetMode
+        - ES.GetMode (realtime power data)
+        - ES.GetStatus (energy statistics)
+        - EM.GetStatus (energy meter / CT data)
         """
         data = {
             "device": await self.get_device_info(),
             "battery": await self.get_battery_status(),
             "es_mode": await self.get_es_mode(),
+            "es_status": await self.get_es_status(),
+            "em_status": await self.get_em_status(),
         }
 
         successful = sum(1 for v in data.values() if v is not None)

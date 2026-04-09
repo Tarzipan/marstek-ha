@@ -1,10 +1,9 @@
-"""Select platform for Marstek."""
+"""Number platform for Marstek."""
 from __future__ import annotations
 
 import logging
-from typing import Any
 
-from homeassistant.components.select import SelectEntity
+from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
@@ -12,7 +11,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, ES_MODES
+from .const import DOMAIN, DOD_MAX, DOD_MIN
 from .coordinator import MarstekDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,28 +22,32 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Marstek select based on a config entry."""
+    """Set up Marstek number entities based on a config entry."""
     coordinator: MarstekDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    async_add_entities([MarstekESModeSelect(coordinator, entry)])
+    async_add_entities([MarstekDODNumber(coordinator, entry)])
 
 
-class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], SelectEntity):
-    """Representation of Marstek Energy Storage Mode selector."""
+class MarstekDODNumber(CoordinatorEntity[MarstekDataUpdateCoordinator], NumberEntity):
+    """Representation of Marstek Depth of Discharge setting."""
 
     _attr_has_entity_name = True
-    _attr_name = "Energy Storage Mode"
-    _attr_icon = "mdi:battery-charging"
+    _attr_name = "Depth of Discharge"
+    _attr_icon = "mdi:battery-arrow-down"
+    _attr_native_min_value = DOD_MIN
+    _attr_native_max_value = DOD_MAX
+    _attr_native_step = 1
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_unit_of_measurement = "%"
 
     def __init__(
         self,
         coordinator: MarstekDataUpdateCoordinator,
         entry: ConfigEntry,
     ) -> None:
-        """Initialize the select entity."""
+        """Initialize the number entity."""
         super().__init__(coordinator)
-        self._attr_unique_id = f"{entry.entry_id}_es_mode_select"
-        self._attr_options = ES_MODES
+        self._attr_unique_id = f"{entry.entry_id}_dod"
 
         device_data = coordinator.data.get("device", {})
         device_name = device_data.get("device", "Unknown")
@@ -59,32 +62,22 @@ class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], Selec
         )
 
     @property
-    def current_option(self) -> str | None:
-        """Return the current selected option."""
-        es_mode_data = self.coordinator.data.get("es_mode")
-
-        if isinstance(es_mode_data, dict):
-            mode = es_mode_data.get("mode")
-            if mode in ES_MODES:
-                return mode
-
+    def native_value(self) -> float | None:
+        """Return the current DOD value."""
+        # DOD is a write-only setting per the API; no query command exists.
+        # Return None (unknown) - the entity still allows setting the value.
         return None
 
-    async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
-        if option not in ES_MODES:
-            raise HomeAssistantError(f"Invalid ES mode: {option}")
-
-        _LOGGER.debug("Setting ES mode to: %s", option)
-        result = await self.coordinator.async_set_es_mode(option)
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the DOD value."""
+        int_value = int(value)
+        _LOGGER.debug("Setting DOD to: %s", int_value)
+        result = await self.coordinator.async_set_dod(int_value)
 
         if not result:
-            raise HomeAssistantError(f"Failed to set ES mode to {option}")
+            raise HomeAssistantError(f"Failed to set DOD to {int_value}")
 
     @property
     def available(self) -> bool:
         """Return if entity is available."""
-        return (
-            self.coordinator.last_update_success
-            and self.current_option is not None
-        )
+        return self.coordinator.last_update_success

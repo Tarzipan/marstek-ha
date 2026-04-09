@@ -30,20 +30,39 @@ class MarstekBinarySensorEntityDescription(BinarySensorEntityDescription):
     value_fn: Callable[[dict[str, Any]], bool | None] | None = None
 
 
+def _safe_get(data: dict, *keys: str) -> Any:
+    """Safely traverse nested dict keys."""
+    current = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+        if current is None:
+            return None
+    return current
+
+
 BINARY_SENSOR_TYPES: tuple[MarstekBinarySensorEntityDescription, ...] = (
     MarstekBinarySensorEntityDescription(
         key="battery_charging_allowed",
         name="Battery Charging Allowed",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-charging-check",
-        value_fn=lambda data: data.get("battery", {}).get("charg_flag"),
+        value_fn=lambda data: _safe_get(data, "battery", "charg_flag"),
     ),
     MarstekBinarySensorEntityDescription(
         key="battery_discharging_allowed",
         name="Battery Discharging Allowed",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-minus-check",
-        value_fn=lambda data: data.get("battery", {}).get("dischrg_flag"),
+        value_fn=lambda data: _safe_get(data, "battery", "dischrg_flag"),
+    ),
+    MarstekBinarySensorEntityDescription(
+        key="ct_connected",
+        name="CT Connected",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        # Prefer es_mode ct_state, fall back to em_status ct_state
+        value_fn=lambda data: _safe_get(data, "es_mode", "ct_state") if _safe_get(data, "es_mode", "ct_state") is not None else _safe_get(data, "em_status", "ct_state"),
     ),
 )
 

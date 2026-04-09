@@ -3,89 +3,75 @@
     "step": {
       "user": {
         "title": "Marstek Batteriespeicher",
-        "description": "Konfigurieren Sie Ihr Marstek-Gerät.\n\n{discovery_info}",
+        "description": "Konfigurieren Sie Ihr Marstek-Ger\u00e4t.",
         "data": {
-          "device_ip": "Geräte-IP-Adresse",
-          "device_port": "Geräte-Port"
+          "device_ip": "Ger\u00e4te-IP-Adresse",
+          "device_port": "Ger\u00e4te-Port"
         },
         "data_description": {
-          "device_ip": "Geben Sie die IP-Adresse Ihres Marstek-Geräts ein (z.B. 192.168.2.178)",
-          "device_port": "UDP-Port für API-Kommunikation (Standard: 30000)"
+          "device_ip": "Geben Sie die IP-Adresse Ihres Marstek-Ger\u00e4ts ein (z.B. 192.168.2.178)",
+          "device_port": "UDP-Port f\u00fcr API-Kommunikation (Standard: 30000)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zum Gerät fehlgeschlagen.\n\nBitte überprüfen Sie:\n• IP-Adresse ist korrekt\n• Gerät ist eingeschaltet\n• Gerät ist im gleichen Netzwerk\n• Port 30000 (UDP) wird nicht von Firewall blockiert\n• Gerät verwendet UDP-Protokoll auf Port 30000\n\nPrüfen Sie die Home Assistant Logs für Details.",
-      "invalid_device": "Gerät verbunden, aber keine gültigen Informationen erhalten.\n\nDas Gerät könnte:\n• Kein Marstek-Gerät sein\n• Eine andere Protokollversion verwenden\n• Ein Firmware-Update benötigen\n\nPrüfen Sie die Home Assistant Logs für Details.",
-      "unknown": "Ein unerwarteter Fehler ist aufgetreten.\n\nBitte prüfen Sie die Home Assistant Logs für Details."
+      "cannot_connect": "Verbindung zum Ger\u00e4t fehlgeschlagen.\n\nBitte \u00fcberpr\u00fcfen Sie:\n\u2022 IP-Adresse ist korrekt\n\u2022 Ger\u00e4t ist eingeschaltet\n\u2022 Ger\u00e4t ist im gleichen Netzwerk\n\u2022 UDP-Port wird nicht von Firewall blockiert\n\nPr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details.",
+      "invalid_device": "Ger\u00e4t verbunden, aber keine g\u00fcltigen Informationen erhalten.\n\nDas Ger\u00e4t k\u00f6nnte:\n\u2022 Kein Marstek-Ger\u00e4t sein\n\u2022 Eine andere Protokollversion verwenden\n\u2022 Ein Firmware-Update ben\u00f6tigen\n\nPr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details.",
+      "unknown": "Ein unerwarteter Fehler ist aufgetreten.\n\nBitte pr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details."
     },
     "abort": {
-      "already_configured": "Dieses Gerät ist bereits konfiguriert."
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Marstek Optionen",
-        "description": "Konfigurieren Sie die Optionen für Ihr Marstek-Gerät."
-      }
+      "already_configured": "Dieses Ger\u00e4t ist bereits konfiguriert."
     }
   },
   "entity": {
     "sensor": {
-      "battery_soc": {
-        "name": "Batterie Ladezustand"
-      },
-      "battery_voltage": {
-        "name": "Batterie Spannung"
-      },
-      "battery_current": {
-        "name": "Batterie Strom"
-      },
-      "battery_power": {
-        "name": "Batterie Leistung"
-      },
-      "battery_temperature": {
-        "name": "Batterie Temperatur"
-      },
-      "pv_voltage": {
-        "name": "PV Spannung"
-      },
-      "pv_current": {
-        "name": "PV Strom"
-      },
-      "pv_power": {
-        "name": "PV Leistung"
-      },
-      "es_power": {
-        "name": "Energiespeicher Leistung"
-      },
-      "es_energy_today": {
-        "name": "Energie Heute"
-      },
-      "es_energy_total": {
-        "name": "Energie Gesamt"
-      },
-      "grid_power": {
-        "name": "Netz Leistung"
-      },
-      "load_power": {
-        "name": "Last Leistung"
-      },
-      "wifi_rssi": {
-        "name": "WLAN Signalstärke"
-      }
+      "battery_soc": { "name": "Batterie Ladezustand" },
+      "battery_temperature": { "name": "Batterie Temperatur" },
+      "battery_capacity": { "name": "Batterie Kapazit\u00e4t" },
+      "battery_rated_capacity": { "name": "Batterie Nennkapazit\u00e4t" },
+      "es_mode": { "name": "Energiespeicher Modus" },
+      "grid_power": { "name": "Netzleistung" },
+      "battery_charging_power": { "name": "Batterie Ladeleistung" },
+      "battery_discharging_power": { "name": "Batterie Entladeleistung" },
+      "offgrid_power": { "name": "Off-Grid Leistung" },
+      "phase_a_power": { "name": "Phase A Leistung" },
+      "phase_b_power": { "name": "Phase B Leistung" },
+      "phase_c_power": { "name": "Phase C Leistung" },
+      "total_power": { "name": "Gesamtleistung" },
+      "input_energy": { "name": "Kumulative Eingangsenergie" },
+      "output_energy": { "name": "Kumulative Ausgangsenergie" },
+      "pv_power": { "name": "Solarleistung" },
+      "bat_power": { "name": "Batterieleistung" },
+      "total_pv_energy": { "name": "Gesamt Solarenergie" },
+      "total_grid_output_energy": { "name": "Gesamt Netzeinspeisung" },
+      "total_grid_input_energy": { "name": "Gesamt Netzbezug" },
+      "total_load_energy": { "name": "Gesamt Lastverbrauch" },
+      "firmware_version": { "name": "Firmware Version" },
+      "wifi_ssid": { "name": "WLAN SSID" }
+    },
+    "binary_sensor": {
+      "battery_charging_allowed": { "name": "Laden erlaubt" },
+      "battery_discharging_allowed": { "name": "Entladen erlaubt" },
+      "ct_connected": { "name": "CT Verbunden" }
     },
     "select": {
-      "es_mode": {
+      "es_mode_select": {
         "name": "Energiespeicher Modus",
         "state": {
-          "self_use": "Eigenverbrauch",
-          "time_of_use": "Zeitabhängig",
-          "backup": "Backup",
-          "off_grid": "Inselbetrieb"
+          "Auto": "Automatik",
+          "AI": "KI",
+          "Manual": "Manuell",
+          "Passive": "Passiv",
+          "UPS": "USV"
         }
       }
+    },
+    "number": {
+      "dod": { "name": "Entladetiefe" }
+    },
+    "switch": {
+      "led": { "name": "LED" },
+      "bluetooth": { "name": "Bluetooth" }
     }
   }
 }
