@@ -49,6 +49,25 @@ def _safe_get(data: dict, *keys: str) -> Any:
     return current
 
 
+# Firmware build at which bat_temp is reported directly in °C (API-conformant).
+# Older builds scaled the value ×10 (e.g. 250 = 25.0 °C).
+_BAT_TEMP_DIRECT_FW = 147
+
+
+def _battery_temperature(data: dict) -> float | None:
+    """Return battery temperature in °C, handling firmware-dependent scaling."""
+    raw = _safe_get(data, "battery", "bat_temp")
+    if raw is None:
+        return None
+    fw = _safe_get(data, "device", "ver")
+    try:
+        if fw is not None and int(fw) >= _BAT_TEMP_DIRECT_FW:
+            return float(raw)
+    except (TypeError, ValueError):
+        pass
+    return float(raw) / 10.0
+
+
 SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     # ── Battery sensors (from Bat.GetStatus) ──
     MarstekSensorEntityDescription(
@@ -65,9 +84,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
-        # Note: VenusE may report bat_temp scaled by 10 (e.g. 250 = 25.0°C).
-        # The API doc example shows 25.0 directly. Keeping /10 based on real device data.
-        value_fn=lambda data: _safe_get(data, "battery", "bat_temp") / 10.0 if _safe_get(data, "battery", "bat_temp") is not None else None,
+        value_fn=_battery_temperature,
     ),
     MarstekSensorEntityDescription(
         key="battery_capacity",
