@@ -61,8 +61,10 @@ BINARY_SENSOR_TYPES: tuple[MarstekBinarySensorEntityDescription, ...] = (
         key="ct_connected",
         name="CT Connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
-        # Prefer es_mode ct_state, fall back to em_status ct_state
-        value_fn=lambda data: _safe_get(data, "es_mode", "ct_state") if _safe_get(data, "es_mode", "ct_state") is not None else _safe_get(data, "em_status", "ct_state"),
+        # EM.GetStatus.ct_state is the authoritative source (always valid).
+        # ES.GetMode.ct_state is only meaningful in Auto/AI mode per API docs,
+        # so it's used only as a fallback when EM.GetStatus is unavailable.
+        value_fn=lambda data: _safe_get(data, "em_status", "ct_state") if _safe_get(data, "em_status", "ct_state") is not None else _safe_get(data, "es_mode", "ct_state"),
     ),
 )
 
