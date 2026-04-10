@@ -50,7 +50,6 @@
       "input_energy": { "name": "Kumulative Eingangsenergie" },
       "output_energy": { "name": "Kumulative Ausgangsenergie" },
       "pv_power": { "name": "Solarleistung" },
-      "bat_power": { "name": "Batterieleistung" },
       "total_pv_energy": { "name": "Gesamt Solarenergie" },
       "total_grid_output_energy": { "name": "Gesamt Netzeinspeisung" },
       "total_grid_input_energy": { "name": "Gesamt Netzbezug" },

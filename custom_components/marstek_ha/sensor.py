@@ -159,6 +159,8 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
+        # Single-phase Venus models always report 0 here; opt-in for 3-phase devices.
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_mode", "b_power"),
     ),
     MarstekSensorEntityDescription(
@@ -167,6 +169,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_mode", "c_power"),
     ),
     MarstekSensorEntityDescription(
@@ -177,13 +180,16 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: _safe_get(data, "es_mode", "total_power"),
     ),
-    # ES.GetMode cumulative energy (value * 0.1 = Wh per API docs)
+    # ES.GetMode cumulative energy (value * 0.1 = Wh per API docs).
+    # Disabled by default: on Venus E these stay 0; the authoritative cumulative
+    # counters come from ES.GetStatus (total_grid_input_energy / ..._output_energy).
     MarstekSensorEntityDescription(
         key="input_energy",
         name="Cumulative Input Energy",
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_mode", "input_energy") * 0.1 if _safe_get(data, "es_mode", "input_energy") is not None else None,
     ),
     MarstekSensorEntityDescription(
@@ -192,10 +198,13 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_mode", "output_energy") * 0.1 if _safe_get(data, "es_mode", "output_energy") is not None else None,
     ),
 
     # ── ES statistics sensors (from ES.GetStatus) ──
+    # Solar sensors disabled by default: only Venus variants with a PV input
+    # populate these. Users of PV-capable devices can enable them in the UI.
     MarstekSensorEntityDescription(
         key="pv_power",
         name="Solar Power",
@@ -203,15 +212,8 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:solar-power",
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_status", "pv_power"),
-    ),
-    MarstekSensorEntityDescription(
-        key="bat_power",
-        name="Battery Power",
-        native_unit_of_measurement=UnitOfPower.WATT,
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: _safe_get(data, "es_status", "bat_power"),
     ),
     MarstekSensorEntityDescription(
         key="total_pv_energy",
@@ -220,6 +222,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:solar-power",
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_status", "total_pv_energy"),
     ),
     MarstekSensorEntityDescription(
@@ -244,6 +247,9 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        # Per API: "total load (or off-grid) energy consumed" — effectively 0
+        # for on-grid installations without UPS/off-grid load.
+        entity_registry_enabled_default=False,
         value_fn=lambda data: _safe_get(data, "es_status", "total_load_energy"),
     ),
 

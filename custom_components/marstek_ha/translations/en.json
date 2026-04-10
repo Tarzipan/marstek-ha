@@ -50,7 +50,6 @@
       "input_energy": { "name": "Cumulative Input Energy" },
       "output_energy": { "name": "Cumulative Output Energy" },
       "pv_power": { "name": "Solar Power" },
-      "bat_power": { "name": "Battery Power" },
       "total_pv_energy": { "name": "Total Solar Energy" },
       "total_grid_output_energy": { "name": "Total Grid Output Energy" },
       "total_grid_input_energy": { "name": "Total Grid Input Energy" },
