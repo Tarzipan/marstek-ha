@@ -107,7 +107,9 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch all endpoints, tolerating partial and transient failures."""
-        data = await self.api.get_all_data()
+        # Cap the poll at one interval so a silent device cannot make polls
+        # pile up: the requests run sequentially and each one may retry.
+        data = await self.api.get_all_data(budget=self.scan_interval)
 
         if all(value is None for value in data.values()):
             self._consecutive_failures += 1

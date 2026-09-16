@@ -138,6 +138,10 @@ geschriebene Wert wird angezeigt und über Neustarts hinweg wiederhergestellt.
 UDP ist verbindungslos: Einzelne verlorene Antworten sind normal. Die
 Integration fängt das ab, statt Entitäten flackern zu lassen:
 
+- Es ist immer nur **eine Anfrage gleichzeitig unterwegs**. Das Gerät
+  beantwortet jeweils nur eine Anfrage und verwirft stillschweigend alles, was
+  währenddessen eintrifft – ein Poll, der seine Kommandos parallel abschickt,
+  verliert die meisten Antworten.
 - Jede Anfrage bekommt eine eigene ID; Antworten werden darüber zugeordnet.
   Verspätete oder fremde Antworten werden verworfen und können keine Werte in
   die falschen Sensoren schreiben.
@@ -147,6 +151,8 @@ Integration fängt das ab, statt Entitäten flackern zu lassen:
 - Bleibt ein einzelner Endpunkt stumm, behält er seinen letzten Wert.
 - Erst nach drei vollständig unbeantworteten Abfragen in Folge werden die
   Entitäten als nicht verfügbar gemeldet.
+- Ein Poll ist auf die Dauer eines Abfrageintervalls begrenzt, damit ein
+  stummes Gerät keine Abfragen auflaufen lässt.
 
 ## Entwicklung
 

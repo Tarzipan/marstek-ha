@@ -35,6 +35,10 @@ class FakeDevice:
     def __init__(self) -> None:
         self.transport: asyncio.DatagramTransport | None = None
         self.requests: list[dict] = []
+        # Highest number of requests the device was handling at once. The real
+        # hardware serves one at a time and drops the rest.
+        self.in_flight = 0
+        self.max_in_flight = 0
         # Per-method behaviour: "ok", "drop", "error", or a delay in seconds.
         self.behaviour: dict[str, object] = {}
         self.results: dict[str, dict] = {}
@@ -62,6 +66,14 @@ class FakeDevice:
         method = request["method"]
         behaviour = self.behaviour.get(method, "ok")
 
+        self.in_flight += 1
+        self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        try:
+            await self._reply(request, method, behaviour, addr)
+        finally:
+            self.in_flight -= 1
+
+    async def _reply(self, request: dict, method: str, behaviour, addr) -> None:
         if behaviour == "drop":
             return
         if isinstance(behaviour, (int, float)):
@@ -215,3 +227,62 @@ async def test_set_mode_reports_failure(api, device):
     """A command the device does not confirm is reported as failed."""
     device.results["ES.SetMode"] = {"set_result": False}
     assert await api.set_es_mode("Auto") is False
+
+
+async def test_requests_are_never_in_flight_together(api, device) -> None:
+    """The device must never be handed a second request while it is busy.
+
+    The hardware serves one request at a time and silently drops anything that
+    arrives meanwhile, so a poll that fires its commands concurrently loses
+    most of the answers. Every command is given a response delay here, which
+    would overlap immediately if the client sent them in parallel.
+    """
+    for method in (
+        "Marstek.GetDevice",
+        "Bat.GetStatus",
+        "ES.GetMode",
+        "ES.GetStatus",
+        "EM.GetStatus",
+        "Wifi.GetStatus",
+    ):
+        device.behaviour[method] = 0.05
+
+    data = await api.get_all_data()
+
+    assert device.max_in_flight == 1
+    assert all(value is not None for value in data.values())
+
+
+async def test_explicitly_concurrent_callers_are_serialized(api, device) -> None:
+    """Even callers that gather requests must not overlap on the wire."""
+    device.behaviour["Bat.GetStatus"] = 0.05
+    device.behaviour["ES.GetStatus"] = 0.05
+
+    await asyncio.gather(
+        api.async_request("Bat.GetStatus"),
+        api.async_request("ES.GetStatus"),
+    )
+
+    assert device.max_in_flight == 1
+
+
+async def test_poll_budget_stops_a_silent_device_from_stalling(api, device) -> None:
+    """A device that stops answering must not hold the poll open indefinitely."""
+    for method in list(device.behaviour) + [
+        "Marstek.GetDevice",
+        "Bat.GetStatus",
+        "ES.GetMode",
+        "ES.GetStatus",
+        "EM.GetStatus",
+        "Wifi.GetStatus",
+    ]:
+        device.behaviour[method] = "drop"
+
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    data = await api.get_all_data(budget=1.5)
+    elapsed = loop.time() - started
+
+    # Without the budget this would take 6 endpoints * 2 attempts * 0.5s = 6s.
+    assert elapsed < 3.0
+    assert all(value is None for value in data.values())

@@ -233,8 +233,14 @@ class MarstekAPI:
         loop = asyncio.get_running_loop()
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
 
-        # Serialize id allocation and the send itself, but not the wait: the
-        # coordinator issues its polls concurrently and they demultiplex by id.
+        # Hold the lock across the send AND the wait, so only one request is
+        # ever in flight towards a given device.
+        #
+        # This is not an optimisation, it is a requirement of the hardware: the
+        # device serves one request at a time and silently drops whatever
+        # arrives while it is busy. Firing a poll's commands concurrently makes
+        # it answer roughly the first one and ignore the rest, which shows up
+        # as arbitrary endpoints timing out on every poll.
         async with self._lock:
             request_id = self._next_id
             # Stay inside 32 bits; the device echoes the id verbatim.
@@ -246,17 +252,19 @@ class MarstekAPI:
             ).encode("utf-8")
             transport.sendto(payload, (self.host, self.port))
 
-        _LOGGER.debug("Sent '%s' id=%s to %s:%s", method, request_id, self.host, self.port)
+            _LOGGER.debug(
+                "Sent '%s' id=%s to %s:%s", method, request_id, self.host, self.port
+            )
 
-        try:
-            async with asyncio.timeout(self._timeout):
-                return await future
-        except TimeoutError as err:
-            raise MarstekTimeout(
-                f"Timeout after {self._timeout}s waiting for '{method}'"
-            ) from err
-        finally:
-            self._pending.pop(request_id, None)
+            try:
+                async with asyncio.timeout(self._timeout):
+                    return await future
+            except TimeoutError as err:
+                raise MarstekTimeout(
+                    f"Timeout after {self._timeout}s waiting for '{method}'"
+                ) from err
+            finally:
+                self._pending.pop(request_id, None)
 
     async def _request_or_none(
         self, method: str, params: dict[str, Any] | None = None
@@ -374,37 +382,45 @@ class MarstekAPI:
 
     # --- Bulk data fetch -------------------------------------------------
 
-    async def get_all_data(self) -> dict[str, Any]:
-        """Fetch every polled endpoint concurrently.
+    async def get_all_data(self, budget: float | None = None) -> dict[str, Any]:
+        """Fetch every polled endpoint, one command after the other.
+
+        The requests are issued strictly sequentially because the device only
+        serves one at a time -- see the locking comment in _attempt_request.
+        In normal operation each answer arrives within a few tens of
+        milliseconds, so a full poll costs well under a second.
+
+        `budget` caps how long the whole poll may take. Without it a device
+        that has gone quiet would hold the poll for retries * timeout seconds
+        per endpoint, far beyond the polling interval. Endpoints not reached
+        within the budget are reported as None, exactly like an unanswered one.
 
         Each entry is None if that particular command went unanswered; the
         coordinator decides what to do with partial results.
         """
-        keys = (
-            DATA_DEVICE,
-            DATA_BATTERY,
-            DATA_ES_MODE,
-            DATA_ES_STATUS,
-            DATA_EM_STATUS,
-            DATA_WIFI,
-        )
-        results = await asyncio.gather(
-            self.get_device_info(),
-            self.get_battery_status(),
-            self.get_es_mode(),
-            self.get_es_status(),
-            self.get_em_status(),
-            self.get_wifi_status(),
-            return_exceptions=True,
+        endpoints: tuple[tuple[str, Any], ...] = (
+            (DATA_DEVICE, self.get_device_info),
+            (DATA_BATTERY, self.get_battery_status),
+            (DATA_ES_MODE, self.get_es_mode),
+            (DATA_ES_STATUS, self.get_es_status),
+            (DATA_EM_STATUS, self.get_em_status),
+            (DATA_WIFI, self.get_wifi_status),
         )
 
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + budget if budget is not None else None
+
         data: dict[str, Any] = {}
-        for key, result in zip(keys, results):
-            if isinstance(result, BaseException):
-                _LOGGER.debug("Fetch of '%s' raised: %s", key, result)
+        for key, fetch in endpoints:
+            if deadline is not None and loop.time() >= deadline:
+                _LOGGER.debug("Poll budget exhausted before '%s'", key)
                 data[key] = None
-            else:
-                data[key] = result
+                continue
+            try:
+                data[key] = await fetch()
+            except Exception as err:  # noqa: BLE001
+                _LOGGER.debug("Fetch of '%s' raised: %s", key, err)
+                data[key] = None
 
         successful = sum(1 for value in data.values() if value is not None)
         _LOGGER.debug(
