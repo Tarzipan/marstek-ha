@@ -64,6 +64,46 @@ def _plain(*keys: str) -> Callable[[dict[str, Any]], Any]:
     return lambda data: safe_get(data, *keys)
 
 
+def _as_signed16(raw: Any) -> float | None:
+    """Reinterpret a 16-bit field that the device sends unsigned.
+
+    Some power fields come back as a raw uint16, so a small negative reading
+    arrives as its two's complement: -12 W is reported as 65524. Venus E is
+    rated 2500 W, so any magnitude above 32767 is this wrap-around rather than
+    a real value, and reinterpreting is safe for the fields that already carry
+    a sign.
+    """
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if 32768 <= value <= 65535:
+        return value - 65536
+    return value
+
+
+def _power(*keys: str) -> Callable[[dict[str, Any]], Any]:
+    """Build a value function for a power field, correcting the sign."""
+    return lambda data: _as_signed16(safe_get(data, *keys))
+
+
+def _battery_power(data: dict[str, Any]) -> float | None:
+    """Return the battery power, positive while discharging.
+
+    ES.GetStatus.bat_power is the DC-side figure, but not every firmware
+    reports it (firmware 150 on Venus E 3.0 omits it). Where it is missing the
+    AC-side ongrid_power carries the same sign convention and is used instead;
+    it differs by the conversion losses, so it is an approximation, not the
+    same quantity.
+    """
+    raw = safe_get(data, DATA_ES_STATUS, "bat_power")
+    if raw is None:
+        raw = safe_get(data, DATA_ES_STATUS, "ongrid_power")
+    return _as_signed16(raw)
+
+
 # Firmware build at which bat_temp is reported directly in degrees Celsius.
 # Older builds scaled the value by ten (e.g. 250 meaning 25.0 C).
 _BAT_TEMP_DIRECT_FW = 147
@@ -86,17 +126,13 @@ def _battery_temperature(data: dict[str, Any]) -> float | None:
 def _battery_power_direction(discharging: bool) -> Callable[[dict[str, Any]], Any]:
     """Split the signed battery power into a charge and a discharge sensor.
 
-    ES.GetStatus.bat_power is positive while discharging and negative while
+    The battery power is positive while discharging and negative while
     charging. The Energy dashboard wants two non-negative figures instead.
     """
 
     def _value(data: dict[str, Any]) -> float | None:
-        raw = safe_get(data, DATA_ES_STATUS, "bat_power")
-        if raw is None:
-            return None
-        try:
-            power = float(raw)
-        except (TypeError, ValueError):
+        power = _battery_power(data)
+        if power is None:
             return None
         if discharging:
             return power if power > 0 else 0.0
@@ -169,7 +205,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         # Signed: positive while discharging, negative while charging.
-        value_fn=_plain(DATA_ES_STATUS, "bat_power"),
+        value_fn=_battery_power,
     ),
     MarstekSensorEntityDescription(
         key="battery_charging_power",
@@ -195,7 +231,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_plain(DATA_ES_STATUS, "ongrid_power"),
+        value_fn=_power(DATA_ES_STATUS, "ongrid_power"),
     ),
     MarstekSensorEntityDescription(
         key="offgrid_power",
@@ -204,7 +240,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         entity_registry_enabled_default=False,
-        value_fn=_plain(DATA_ES_STATUS, "offgrid_power"),
+        value_fn=_power(DATA_ES_STATUS, "offgrid_power"),
     ),
     MarstekSensorEntityDescription(
         key="pv_power",
@@ -215,7 +251,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         icon="mdi:solar-power",
         # Only Venus variants with a PV input populate this.
         entity_registry_enabled_default=False,
-        value_fn=_plain(DATA_ES_STATUS, "pv_power"),
+        value_fn=_power(DATA_ES_STATUS, "pv_power"),
     ),
 
     # -- Energy counters (ES.GetStatus) -------------------------------------
@@ -235,30 +271,31 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="total_grid_output_energy",
         translation_key="total_grid_output_energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        # Reported directly in Wh.
-        value_fn=_plain(DATA_ES_STATUS, "total_grid_output_energy"),
+        # Reported in Wh; exposed as kWh.
+        value_fn=_scaled(0.001, DATA_ES_STATUS, "total_grid_output_energy"),
     ),
     MarstekSensorEntityDescription(
         key="total_grid_input_energy",
         translation_key="total_grid_input_energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        # Reported directly in Wh.
-        value_fn=_plain(DATA_ES_STATUS, "total_grid_input_energy"),
+        # Reported in Wh; exposed as kWh.
+        value_fn=_scaled(0.001, DATA_ES_STATUS, "total_grid_input_energy"),
     ),
     MarstekSensorEntityDescription(
         key="total_load_energy",
         translation_key="total_load_energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         # Off-grid load only; stays at zero on a purely on-grid install.
+        # Reported in Wh; exposed as kWh.
         entity_registry_enabled_default=False,
-        value_fn=_plain(DATA_ES_STATUS, "total_load_energy"),
+        value_fn=_scaled(0.001, DATA_ES_STATUS, "total_load_energy"),
     ),
 
     # -- Energy meter / CT (EM.GetStatus) -----------------------------------
@@ -268,7 +305,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_plain(DATA_EM_STATUS, "a_power"),
+        value_fn=_power(DATA_EM_STATUS, "a_power"),
     ),
     MarstekSensorEntityDescription(
         key="phase_b_power",
@@ -276,7 +313,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_plain(DATA_EM_STATUS, "b_power"),
+        value_fn=_power(DATA_EM_STATUS, "b_power"),
     ),
     MarstekSensorEntityDescription(
         key="phase_c_power",
@@ -284,7 +321,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_plain(DATA_EM_STATUS, "c_power"),
+        value_fn=_power(DATA_EM_STATUS, "c_power"),
     ),
     MarstekSensorEntityDescription(
         key="meter_total_power",
@@ -292,25 +329,25 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=_plain(DATA_EM_STATUS, "total_power"),
+        value_fn=_power(DATA_EM_STATUS, "total_power"),
     ),
     MarstekSensorEntityDescription(
         key="meter_input_energy",
         translation_key="meter_input_energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        # Reported in units of 0.1 Wh.
-        value_fn=_scaled(0.1, DATA_EM_STATUS, "input_energy"),
+        # Reported in units of 0.1 Wh; exposed as kWh.
+        value_fn=_scaled(0.0001, DATA_EM_STATUS, "input_energy"),
     ),
     MarstekSensorEntityDescription(
         key="meter_output_energy",
         translation_key="meter_output_energy",
-        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
-        # Reported in units of 0.1 Wh.
-        value_fn=_scaled(0.1, DATA_EM_STATUS, "output_energy"),
+        # Reported in units of 0.1 Wh; exposed as kWh.
+        value_fn=_scaled(0.0001, DATA_EM_STATUS, "output_energy"),
     ),
 
     # -- Mode and diagnostics ------------------------------------------------

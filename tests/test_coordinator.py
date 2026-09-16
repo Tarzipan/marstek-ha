@@ -84,12 +84,55 @@ async def entry(hass: HomeAssistant, api) -> MockConfigEntry:
 async def test_entities_are_created_and_scaled(hass: HomeAssistant, entry) -> None:
     """Sensors read the right fields and apply the documented scaling."""
     assert hass.states.get("sensor.venus_e_battery_state_of_charge").state == "61"
-    # total_pv_energy is reported in units of 0.01 kWh -> 250 means 2.5 kWh.
     assert hass.states.get("sensor.venus_e_total_solar_energy") is None  # disabled
-    # meter input_energy is in units of 0.1 Wh -> 5000 means 500 Wh.
-    assert hass.states.get("sensor.venus_e_meter_input_energy").state == "500.0"
+    # meter input_energy is in units of 0.1 Wh -> 5000 means 0.5 kWh.
+    assert hass.states.get("sensor.venus_e_meter_input_energy").state == "0.5"
+    # total_grid_input_energy is in Wh -> 12345 means 12.345 kWh.
+    assert (
+        hass.states.get("sensor.venus_e_total_grid_input_energy").state == "12.345"
+    )
     # bat_power is negative while charging, so charging power is its magnitude.
     assert hass.states.get("sensor.venus_e_charging_power").state == "800.0"
+    assert hass.states.get("sensor.venus_e_discharging_power").state == "0.0"
+
+
+async def test_unsigned_power_field_is_reinterpreted(
+    hass: HomeAssistant, entry, api
+) -> None:
+    """A uint16 wrap-around must be read back as the small negative it is.
+
+    The device reports offgrid_power unsigned, so -12 W arrives as 65524. The
+    correction is applied to every power field, checked here on two that are
+    enabled by default.
+    """
+    data = _sample_data()
+    data["es_status"]["ongrid_power"] = 65524
+    data["em_status"]["a_power"] = 64682  # -854 W
+    api.get_all_data.return_value = data
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.venus_e_grid_power").state == "-12.0"
+    assert hass.states.get("sensor.venus_e_phase_a_power").state == "-854.0"
+
+
+async def test_battery_power_falls_back_to_grid_power(
+    hass: HomeAssistant, entry, api
+) -> None:
+    """Firmware that omits bat_power still yields charge/discharge figures.
+
+    Firmware 150 on Venus E 3.0 does not report bat_power; ongrid_power
+    carries the same sign convention and stands in for it.
+    """
+    data = _sample_data()
+    del data["es_status"]["bat_power"]
+    data["es_status"]["ongrid_power"] = -2491
+    api.get_all_data.return_value = data
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.venus_e_battery_power").state == "-2491.0"
+    assert hass.states.get("sensor.venus_e_charging_power").state == "2491.0"
     assert hass.states.get("sensor.venus_e_discharging_power").state == "0.0"
 
 

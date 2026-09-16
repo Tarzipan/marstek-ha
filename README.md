@@ -109,8 +109,17 @@ sind einem Gerät pro Speicher zugeordnet.
 
 Die Energiezähler der API haben unterschiedliche Skalierungen
 (`total_pv_energy` in 0,01 kWh, die Zählerwerte in 0,1 Wh, die Netzzähler in Wh).
-Die Integration rechnet sie um, sodass alle Energiesensoren mit passender
-`device_class` und `state_class` direkt im **Energie-Dashboard** verwendbar sind.
+Die Integration rechnet alle auf **kWh** um, sodass sie mit passender
+`device_class` und `state_class` direkt im **Energie-Dashboard** verwendbar und
+untereinander vergleichbar sind.
+
+Einzelne Leistungsfelder liefert das Gerät als vorzeichenlose 16-Bit-Zahl – eine
+kleine negative Leistung kommt dann als Wert nahe 65536 an (`-12 W` als `65524`).
+Die Integration rechnet das für alle Leistungsfelder zurück.
+
+`ES.GetStatus.bat_power` fehlt auf manchen Firmwares (etwa 150 auf der Venus E
+3.0). Fällt es weg, wird die AC-seitige `ongrid_power` als Ersatz verwendet; sie
+trägt dasselbe Vorzeichen, unterscheidet sich aber um die Wandlungsverluste.
 
 Wenig gebräuchliche und modellabhängige Sensoren (Solar, Inselnetz, doppelte
 Ladezustände) sind standardmäßig deaktiviert und lassen sich in der UI
