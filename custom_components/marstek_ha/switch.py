@@ -3,126 +3,93 @@ from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import MarstekDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
+from .coordinator import MarstekConfigEntry, MarstekDataUpdateCoordinator
+from .entity import MarstekEntity
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class MarstekSwitchEntityDescription(SwitchEntityDescription):
-    """Describes Marstek switch entity."""
+    """Describes a Marstek switch."""
 
-    turn_on_fn: Callable[[MarstekDataUpdateCoordinator], Coroutine[Any, Any, bool]] | None = None
-    turn_off_fn: Callable[[MarstekDataUpdateCoordinator], Coroutine[Any, Any, bool]] | None = None
+    set_fn: Callable[[MarstekDataUpdateCoordinator, bool], Coroutine[Any, Any, bool]]
 
 
 SWITCH_TYPES: tuple[MarstekSwitchEntityDescription, ...] = (
     MarstekSwitchEntityDescription(
         key="led",
-        name="LED",
+        translation_key="led",
         icon="mdi:led-on",
-        turn_on_fn=lambda coord: coord.async_set_led(True),
-        turn_off_fn=lambda coord: coord.async_set_led(False),
+        entity_category=EntityCategory.CONFIG,
+        set_fn=lambda coordinator, state: coordinator.async_set_led(state),
     ),
     MarstekSwitchEntityDescription(
         key="bluetooth",
-        name="Bluetooth",
+        translation_key="bluetooth",
         icon="mdi:bluetooth",
-        turn_on_fn=lambda coord: coord.async_set_ble_adv(True),
-        turn_off_fn=lambda coord: coord.async_set_ble_adv(False),
+        entity_category=EntityCategory.CONFIG,
+        set_fn=lambda coordinator, state: coordinator.async_set_ble_adv(state),
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MarstekConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Marstek switch entities based on a config entry."""
-    coordinator: MarstekDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-
+    """Set up Marstek switches from a config entry."""
+    coordinator = entry.runtime_data
     async_add_entities(
-        MarstekSwitch(coordinator, description, entry)
-        for description in SWITCH_TYPES
+        MarstekSwitch(coordinator, description) for description in SWITCH_TYPES
     )
 
 
-class MarstekSwitch(CoordinatorEntity[MarstekDataUpdateCoordinator], SwitchEntity):
-    """Representation of a Marstek switch."""
+class MarstekSwitch(MarstekEntity, SwitchEntity):
+    """A write-only Marstek switch.
+
+    Led.Ctrl and Ble.Adv have no matching query command, so the state shown is
+    the last one successfully written, flagged as assumed.
+    """
 
     entity_description: MarstekSwitchEntityDescription
-    _attr_has_entity_name = True
+    _attr_assumed_state = True
 
     def __init__(
         self,
         coordinator: MarstekDataUpdateCoordinator,
         description: MarstekSwitchEntityDescription,
-        entry: ConfigEntry,
     ) -> None:
         """Initialize the switch."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        device_id = entry.unique_id or entry.entry_id
-        self._attr_unique_id = f"{device_id}_{description.key}_switch"
+        super().__init__(coordinator, f"{description.key}_switch", description)
         self._assumed_state: bool | None = None
-
-        device_data = coordinator.data.get("device") or {}
-        device_name = device_data.get("device", "Unknown")
-        firmware_ver = device_data.get("ver", "Unknown")
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.title,
-            manufacturer="Marstek",
-            model=device_name,
-            sw_version=str(firmware_ver),
-        )
 
     @property
     def is_on(self) -> bool | None:
-        """Return the assumed state of the switch."""
-        # LED and BLE are write-only commands per the API; no query for current state.
+        """Return the last state written, if any."""
         return self._assumed_state
 
-    @property
-    def assumed_state(self) -> bool:
-        """Return True since we can't query the actual state."""
-        return True
+    async def _async_set(self, state: bool) -> None:
+        """Write a new state and remember it."""
+        if not await self.entity_description.set_fn(self.coordinator, state):
+            raise HomeAssistantError(
+                f"Failed to switch {self.entity_description.key} "
+                f"{'on' if state else 'off'}"
+            )
+        self._assumed_state = state
+        self.async_write_ha_state()
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the switch on."""
-        if self.entity_description.turn_on_fn is None:
-            return
-        result = await self.entity_description.turn_on_fn(self.coordinator)
-        if not result:
-            raise HomeAssistantError(f"Failed to turn on {self.entity_description.name}")
-        self._assumed_state = True
-        self.async_write_ha_state()
+        await self._async_set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the switch off."""
-        if self.entity_description.turn_off_fn is None:
-            return
-        result = await self.entity_description.turn_off_fn(self.coordinator)
-        if not result:
-            raise HomeAssistantError(f"Failed to turn off {self.entity_description.name}")
-        self._assumed_state = False
-        self.async_write_ha_state()
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return self.coordinator.last_update_success
+        await self._async_set(False)

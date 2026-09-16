@@ -1,70 +1,158 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Marstek Batteriespeicher",
-        "description": "Konfigurieren Sie Ihr Marstek-Ger\u00e4t.",
+      "pick_device": {
+        "title": "Marstek-Gerät auswählen",
+        "description": "Im Netzwerk gefundene Geräte. Wähle eines aus oder gib die Adresse von Hand ein.",
         "data": {
-          "device_ip": "Ger\u00e4te-IP-Adresse",
-          "device_port": "Ger\u00e4te-Port"
+          "device_ip": "Gerät"
+        }
+      },
+      "manual": {
+        "title": "Marstek-Batteriespeicher",
+        "description": "Adresse des Marstek-Geräts eingeben.",
+        "data": {
+          "device_ip": "IP-Adresse",
+          "device_port": "UDP-Port"
         },
         "data_description": {
-          "device_ip": "Geben Sie die IP-Adresse Ihres Marstek-Ger\u00e4ts ein (z.B. 192.168.2.178)",
-          "device_port": "UDP-Port f\u00fcr API-Kommunikation (Standard: 30000)"
+          "device_ip": "IP-Adresse des Geräts, z. B. 192.168.2.178.",
+          "device_port": "UDP-Port, auf dem das Gerät die Open API bereitstellt (Standard: 30000)."
         }
       },
       "reconfigure": {
-        "title": "Marstek-Ger\u00e4t neu konfigurieren",
-        "description": "Aktualisieren Sie die Verbindungseinstellungen f\u00fcr Ihr Marstek-Ger\u00e4t.",
+        "title": "Marstek-Gerät neu konfigurieren",
+        "description": "Verbindungseinstellungen aktualisieren.",
         "data": {
-          "device_ip": "Ger\u00e4te-IP-Adresse",
-          "device_port": "Ger\u00e4te-Port"
+          "device_ip": "IP-Adresse",
+          "device_port": "UDP-Port"
         }
       }
     },
     "error": {
-      "cannot_connect": "Verbindung zum Ger\u00e4t fehlgeschlagen.\n\nBitte \u00fcberpr\u00fcfen Sie:\n\u2022 IP-Adresse ist korrekt\n\u2022 Ger\u00e4t ist eingeschaltet\n\u2022 Ger\u00e4t ist im gleichen Netzwerk\n\u2022 UDP-Port wird nicht von Firewall blockiert\n\nPr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details.",
-      "invalid_device": "Ger\u00e4t verbunden, aber keine g\u00fcltigen Informationen erhalten.\n\nDas Ger\u00e4t k\u00f6nnte:\n\u2022 Kein Marstek-Ger\u00e4t sein\n\u2022 Eine andere Protokollversion verwenden\n\u2022 Ein Firmware-Update ben\u00f6tigen\n\nPr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details.",
-      "unknown": "Ein unerwarteter Fehler ist aufgetreten.\n\nBitte pr\u00fcfen Sie die Home Assistant Logs f\u00fcr Details."
+      "cannot_connect": "Keine Antwort vom Gerät. Bitte IP-Adresse, Port und Stromversorgung prüfen sowie, dass die Open API am Gerät aktiviert ist.",
+      "invalid_device": "Das Gerät hat geantwortet, aber keine gültige Kennung geliefert. Möglicherweise kein Marstek-Gerät oder eine ältere Firmware.",
+      "unknown": "Unerwarteter Fehler. Bitte die Home-Assistant-Logs prüfen."
     },
     "abort": {
-      "already_configured": "Dieses Ger\u00e4t ist bereits konfiguriert.",
-      "reconfigure_successful": "Konfiguration erfolgreich aktualisiert."
+      "already_configured": "Dieses Gerät ist bereits eingerichtet.",
+      "reconfigure_successful": "Konfiguration aktualisiert.",
+      "wrong_device": "Unter dieser Adresse antwortet ein anderes Marstek-Gerät. Bitte richte es als eigenen Eintrag ein."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek-Optionen",
+        "data": {
+          "scan_interval": "Abfrageintervall",
+          "min_write_interval": "Mindestabstand zwischen Schreibbefehlen"
+        },
+        "data_description": {
+          "scan_interval": "Wie oft das Gerät abgefragt wird. Werte unter 5 s führen zu verworfenen Anfragen.",
+          "min_write_interval": "Untergrenze für den Abstand zweier ES.SetMode-Befehle. Schützt das Gerät, wenn Passiv-Sollwerte häufig nachgeführt werden. 0 deaktiviert die Begrenzung."
+        }
+      }
     }
   },
   "entity": {
     "sensor": {
-      "battery_soc": { "name": "Batterie Ladezustand" },
-      "battery_temperature": { "name": "Batterie Temperatur" },
-      "battery_capacity": { "name": "Batterie Kapazit\u00e4t" },
-      "battery_rated_capacity": { "name": "Batterie Nennkapazit\u00e4t" },
-      "es_mode": { "name": "Energiespeicher Modus" },
-      "grid_power": { "name": "Netzleistung" },
-      "battery_charging_power": { "name": "Batterie Ladeleistung" },
-      "battery_discharging_power": { "name": "Batterie Entladeleistung" },
-      "offgrid_power": { "name": "Off-Grid Leistung" },
-      "phase_a_power": { "name": "Phase A Leistung" },
-      "phase_b_power": { "name": "Phase B Leistung" },
-      "phase_c_power": { "name": "Phase C Leistung" },
-      "total_power": { "name": "Gesamtleistung" },
-      "input_energy": { "name": "Kumulative Eingangsenergie" },
-      "output_energy": { "name": "Kumulative Ausgangsenergie" },
-      "pv_power": { "name": "Solarleistung" },
-      "total_pv_energy": { "name": "Gesamt Solarenergie" },
-      "total_grid_output_energy": { "name": "Gesamt Netzeinspeisung" },
-      "total_grid_input_energy": { "name": "Gesamt Netzbezug" },
-      "total_load_energy": { "name": "Gesamt Lastverbrauch" },
-      "firmware_version": { "name": "Firmware Version" },
-      "wifi_ssid": { "name": "WLAN SSID" }
+      "battery_soc": {
+        "name": "Batterie-Ladezustand"
+      },
+      "battery_temperature": {
+        "name": "Batterietemperatur"
+      },
+      "battery_capacity": {
+        "name": "Batteriekapazität"
+      },
+      "battery_rated_capacity": {
+        "name": "Batterie-Nennkapazität"
+      },
+      "es_battery_soc": {
+        "name": "Ladezustand (Wechselrichter)"
+      },
+      "es_battery_capacity": {
+        "name": "Kapazität (Wechselrichter)"
+      },
+      "battery_power": {
+        "name": "Batterieleistung"
+      },
+      "battery_charging_power": {
+        "name": "Ladeleistung"
+      },
+      "battery_discharging_power": {
+        "name": "Entladeleistung"
+      },
+      "grid_power": {
+        "name": "Netzleistung"
+      },
+      "offgrid_power": {
+        "name": "Inselnetz-Leistung"
+      },
+      "pv_power": {
+        "name": "Solarleistung"
+      },
+      "total_pv_energy": {
+        "name": "Solarenergie gesamt"
+      },
+      "total_grid_output_energy": {
+        "name": "Netzeinspeisung gesamt"
+      },
+      "total_grid_input_energy": {
+        "name": "Netzbezug gesamt"
+      },
+      "total_load_energy": {
+        "name": "Lastverbrauch gesamt"
+      },
+      "phase_a_power": {
+        "name": "Leistung Phase A"
+      },
+      "phase_b_power": {
+        "name": "Leistung Phase B"
+      },
+      "phase_c_power": {
+        "name": "Leistung Phase C"
+      },
+      "meter_total_power": {
+        "name": "Zähler-Gesamtleistung"
+      },
+      "meter_input_energy": {
+        "name": "Zähler Bezug"
+      },
+      "meter_output_energy": {
+        "name": "Zähler Einspeisung"
+      },
+      "es_mode": {
+        "name": "Energiespeicher-Modus"
+      },
+      "firmware_version": {
+        "name": "Firmware-Version"
+      },
+      "wifi_ssid": {
+        "name": "WLAN-SSID"
+      },
+      "wifi_rssi": {
+        "name": "WLAN-Signalstärke"
+      },
+      "wifi_ip": {
+        "name": "WLAN-IP-Adresse"
+      }
     },
     "binary_sensor": {
-      "battery_charging_allowed": { "name": "Laden erlaubt" },
-      "battery_discharging_allowed": { "name": "Entladen erlaubt" },
-      "ct_connected": { "name": "CT Verbunden" }
+      "battery_charging_allowed": {
+        "name": "Laden erlaubt"
+      },
+      "battery_discharging_allowed": {
+        "name": "Entladen erlaubt"
+      },
+      "ct_connected": {
+        "name": "Stromwandler verbunden"
+      }
     },
     "select": {
       "es_mode_select": {
-        "name": "Energiespeicher Modus",
+        "name": "Energiespeicher-Modus",
         "state": {
           "Auto": "Automatik",
           "AI": "KI",
@@ -75,11 +163,39 @@
       }
     },
     "number": {
-      "dod": { "name": "Entladetiefe" }
+      "dod": {
+        "name": "Entladetiefe"
+      },
+      "passive_power": {
+        "name": "Passiv-Sollleistung"
+      },
+      "passive_cd_time": {
+        "name": "Passiv-Countdown"
+      }
     },
     "switch": {
-      "led": { "name": "LED" },
-      "bluetooth": { "name": "Bluetooth" }
+      "led": {
+        "name": "LED"
+      },
+      "bluetooth": {
+        "name": "Bluetooth"
+      }
+    }
+  },
+  "services": {
+    "set_passive_power": {
+      "name": "Passiv-Leistung setzen",
+      "description": "Schaltet das Gerät in den Passiv-Modus und setzt Sollleistung und Countdown in einem Befehl. Nach Ablauf des Countdowns verlässt das Gerät den Passiv-Modus selbsttätig.",
+      "fields": {
+        "power": {
+          "name": "Leistung",
+          "description": "Sollleistung in Watt. Positiv entlädt die Batterie, negativ lädt sie."
+        },
+        "cd_time": {
+          "name": "Countdown",
+          "description": "Sekunden, nach denen das Gerät ohne neuen Befehl den Passiv-Modus verlässt. Etwa das Zwei- bis Dreifache des Nachführintervalls wählen."
+        }
+      }
     }
   }
 }

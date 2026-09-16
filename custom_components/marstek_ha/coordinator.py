@@ -1,8 +1,10 @@
 """DataUpdateCoordinator for Marstek."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
+import time
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -12,65 +14,203 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     CONF_DEVICE_IP,
     CONF_DEVICE_PORT,
+    CONF_MIN_WRITE_INTERVAL,
+    CONF_SCAN_INTERVAL,
+    DATA_ES_MODE,
+    DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_PORT,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    ES_MODE_PASSIVE,
+    MAX_CONSECUTIVE_FAILURES,
+    PASSIVE_CD_TIME_DEFAULT,
+    PASSIVE_POWER_DEFAULT,
 )
 from .marstek_api import MarstekAPI
 
 _LOGGER = logging.getLogger(__name__)
 
+# Config entry carrying its coordinator in runtime_data.
+MarstekConfigEntry = ConfigEntry["MarstekDataUpdateCoordinator"]
+
 
 class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    """Class to manage fetching Marstek data."""
+    """Fetches data from one Marstek device and serializes writes to it."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    config_entry: MarstekConfigEntry
+
+    def __init__(self, hass: HomeAssistant, entry: MarstekConfigEntry) -> None:
         """Initialize the coordinator."""
-        port = entry.data.get(CONF_DEVICE_PORT, DEFAULT_PORT)
         self.api = MarstekAPI(
             entry.data[CONF_DEVICE_IP],
-            port,
-            port,
+            entry.data.get(CONF_DEVICE_PORT, DEFAULT_PORT),
         )
-        self.entry = entry
+
+        # Consecutive polls in which *every* endpoint went unanswered. A single
+        # lost datagram must not flip entities to unavailable, so failures are
+        # only escalated to UpdateFailed once this exceeds the threshold.
+        self._consecutive_failures = 0
+
+        # Write throttling state, shared by the select, the numbers and the
+        # service so that all write paths obey one rate limit.
+        self._write_lock = asyncio.Lock()
+        self._last_write_monotonic = 0.0
+        self._last_passive_command: tuple[int, int] | None = None
+
+        # Desired Passive setpoint, held here so the two number entities can
+        # each change one half of a command that must be sent as a whole.
+        self.passive_power: int = PASSIVE_POWER_DEFAULT
+        self.passive_cd_time: int = PASSIVE_CD_TIME_DEFAULT
 
         super().__init__(
             hass,
             _LOGGER,
-            name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            name=f"{DOMAIN} {entry.data[CONF_DEVICE_IP]}",
+            config_entry=entry,
+            # Read from `entry` rather than self.scan_interval: the base class
+            # only assigns self.config_entry inside this super() call.
+            update_interval=timedelta(
+                seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            ),
         )
 
+    @property
+    def scan_interval(self) -> int:
+        """Return the configured polling interval in seconds."""
+        return self.config_entry.options.get(
+            CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
+        )
+
+    @property
+    def min_write_interval(self) -> int:
+        """Return the minimum number of seconds between two ES.SetMode writes."""
+        return self.config_entry.options.get(
+            CONF_MIN_WRITE_INTERVAL, DEFAULT_MIN_WRITE_INTERVAL
+        )
+
+    @property
+    def device_id(self) -> str:
+        """Return the stable identifier used for devices and unique IDs."""
+        return self.config_entry.unique_id or self.config_entry.entry_id
+
+    @property
+    def current_mode(self) -> str | None:
+        """Return the energy storage mode last reported by the device."""
+        es_mode = (self.data or {}).get(DATA_ES_MODE)
+        if isinstance(es_mode, dict):
+            mode = es_mode.get("mode")
+            if isinstance(mode, str):
+                return mode
+        return None
+
+    # --- Polling ---------------------------------------------------------
+
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data from API."""
-        try:
-            data = await self.api.get_all_data()
-        except Exception as err:
-            raise UpdateFailed(f"Error communicating with device: {err}") from err
+        """Fetch all endpoints, tolerating partial and transient failures."""
+        data = await self.api.get_all_data()
 
-        if all(v is None for v in data.values()):
-            raise UpdateFailed("All API calls failed - device may be unreachable")
+        if all(value is None for value in data.values()):
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                raise UpdateFailed(
+                    f"No response from {self.api.host} in "
+                    f"{self._consecutive_failures} consecutive polls"
+                )
+            _LOGGER.debug(
+                "Poll %s of %s returned nothing; keeping previous data",
+                self._consecutive_failures, MAX_CONSECUTIVE_FAILURES,
+            )
+            if self.data:
+                return self.data
+            raise UpdateFailed(f"No response from {self.api.host}")
 
-        # Merge with previous data: keep last known good values for failed calls
+        self._consecutive_failures = 0
+
+        # Carry forward the last known good value for any endpoint that did not
+        # answer this round, so one dropped datagram does not blank out a
+        # subset of the entities.
         if self.data:
             for key, value in data.items():
                 if value is None and self.data.get(key) is not None:
-                    _LOGGER.debug(
-                        "Keeping previous data for '%s' (current call returned None)", key
-                    )
                     data[key] = self.data[key]
 
         return data
 
+    def async_update_interval(self) -> None:
+        """Apply a changed polling interval from the options."""
+        self.update_interval = timedelta(seconds=self.scan_interval)
+
+    # --- Writes ----------------------------------------------------------
+
+    async def _async_throttle(self) -> None:
+        """Wait until the configured minimum write spacing has elapsed."""
+        interval = self.min_write_interval
+        if interval <= 0:
+            return
+        elapsed = time.monotonic() - self._last_write_monotonic
+        if elapsed < interval:
+            await asyncio.sleep(interval - elapsed)
+
     async def async_set_es_mode(self, mode: str) -> bool:
-        """Set the energy storage mode via the API."""
-        result = await self.api.set_es_mode(mode)
+        """Set the energy storage mode.
+
+        Switching into Passive carries the currently held setpoint so the
+        device does not sit at an unintended power level.
+        """
+        if mode == ES_MODE_PASSIVE:
+            return await self.async_set_passive_power(
+                self.passive_power, self.passive_cd_time
+            )
+
+        async with self._write_lock:
+            await self._async_throttle()
+            result = await self.api.set_es_mode(mode)
+            self._last_write_monotonic = time.monotonic()
+            self._last_passive_command = None
+
+        if result:
+            await self.async_request_refresh()
+        return result
+
+    async def async_set_passive_power(
+        self, power: int, cd_time: int, *, force: bool = False
+    ) -> bool:
+        """Enter Passive mode with a setpoint and countdown.
+
+        This is the integration's main write path. It is rate limited and, by
+        default, suppresses a command that is identical to the last one -- but
+        only while the device still reports Passive mode. Once the countdown
+        has expired and the device has fallen back, an identical setpoint is a
+        genuine re-arm and is sent through.
+        """
+        power = int(power)
+        cd_time = int(cd_time)
+
+        async with self._write_lock:
+            unchanged = self._last_passive_command == (power, cd_time)
+            if unchanged and not force and self.current_mode == ES_MODE_PASSIVE:
+                _LOGGER.debug(
+                    "Skipping duplicate passive setpoint %s W / %s s", power, cd_time
+                )
+                return True
+
+            await self._async_throttle()
+            result = await self.api.set_passive_power(power, cd_time)
+            self._last_write_monotonic = time.monotonic()
+
+            if result:
+                self.passive_power = power
+                self.passive_cd_time = cd_time
+                self._last_passive_command = (power, cd_time)
+            else:
+                self._last_passive_command = None
+
         if result:
             await self.async_request_refresh()
         return result
 
     async def async_set_dod(self, value: int) -> bool:
-        """Set the depth of discharge via the API."""
+        """Set the depth of discharge."""
         result = await self.api.set_dod(value)
         if result:
             await self.async_request_refresh()
@@ -78,18 +218,13 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def async_set_ble_adv(self, enable: bool) -> bool:
         """Enable or disable Bluetooth advertising."""
-        result = await self.api.set_ble_adv(enable)
-        if result:
-            await self.async_request_refresh()
-        return result
+        return await self.api.set_ble_adv(enable)
 
     async def async_set_led(self, state: bool) -> bool:
-        """Control the LED on/off."""
-        result = await self.api.set_led(state)
-        if result:
-            await self.async_request_refresh()
-        return result
+        """Control the status LED."""
+        return await self.api.set_led(state)
 
     async def async_shutdown(self) -> None:
-        """Shutdown the coordinator."""
-        await self.api.disconnect()
+        """Close the UDP endpoint."""
+        await super().async_shutdown()
+        await self.api.async_close()

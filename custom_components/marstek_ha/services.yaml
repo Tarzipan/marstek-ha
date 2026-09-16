@@ -1,0 +1,26 @@
+set_passive_power:
+  target:
+    device:
+      integration: marstek_ha
+  fields:
+    power:
+      required: true
+      example: -800
+      selector:
+        number:
+          min: -2500
+          max: 2500
+          step: 10
+          unit_of_measurement: W
+          mode: box
+    cd_time:
+      required: true
+      default: 300
+      example: 30
+      selector:
+        number:
+          min: 0
+          max: 86400
+          step: 1
+          unit_of_measurement: s
+          mode: box

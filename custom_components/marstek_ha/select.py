@@ -2,90 +2,57 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.select import SelectEntity
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, ES_MODES
-from .coordinator import MarstekDataUpdateCoordinator
+from .const import ES_MODES
+from .coordinator import MarstekConfigEntry, MarstekDataUpdateCoordinator
+from .entity import MarstekEntity
 
 _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MarstekConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Marstek select based on a config entry."""
-    coordinator: MarstekDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-
-    async_add_entities([MarstekESModeSelect(coordinator, entry)])
+    """Set up the Marstek mode select from a config entry."""
+    async_add_entities([MarstekESModeSelect(entry.runtime_data)])
 
 
-class MarstekESModeSelect(CoordinatorEntity[MarstekDataUpdateCoordinator], SelectEntity):
-    """Representation of Marstek Energy Storage Mode selector."""
+class MarstekESModeSelect(MarstekEntity, SelectEntity):
+    """Selects the energy storage mode.
 
-    _attr_has_entity_name = True
-    _attr_name = "Energy Storage Mode"
+    Note on the Auto mode: with the Open API enabled, Marstek document that
+    some built-in behaviour may be disabled to avoid command conflicts, so Auto
+    (anti-feed regulation against the CT) is not guaranteed to keep working.
+    If it does not, drive the device through Passive instead -- see the
+    marstek_ha.set_passive_power service, which is designed for exactly that.
+    """
+
+    _attr_translation_key = "es_mode_select"
     _attr_icon = "mdi:battery-charging"
+    _attr_options = ES_MODES
 
-    def __init__(
-        self,
-        coordinator: MarstekDataUpdateCoordinator,
-        entry: ConfigEntry,
-    ) -> None:
+    def __init__(self, coordinator: MarstekDataUpdateCoordinator) -> None:
         """Initialize the select entity."""
-        super().__init__(coordinator)
-        device_id = entry.unique_id or entry.entry_id
-        self._attr_unique_id = f"{device_id}_es_mode_select"
-        self._attr_options = ES_MODES
-
-        device_data = coordinator.data.get("device") or {}
-        device_name = device_data.get("device", "Unknown")
-        firmware_ver = device_data.get("ver", "Unknown")
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.title,
-            manufacturer="Marstek",
-            model=device_name,
-            sw_version=str(firmware_ver),
-        )
+        super().__init__(coordinator, "es_mode_select")
 
     @property
     def current_option(self) -> str | None:
-        """Return the current selected option."""
-        es_mode_data = self.coordinator.data.get("es_mode")
-
-        if isinstance(es_mode_data, dict):
-            mode = es_mode_data.get("mode")
-            if mode in ES_MODES:
-                return mode
-
-        return None
+        """Return the mode the device currently reports."""
+        mode = self.coordinator.current_mode
+        return mode if mode in ES_MODES else None
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """Switch the device to the selected mode."""
         if option not in ES_MODES:
-            raise HomeAssistantError(f"Invalid ES mode: {option}")
+            raise HomeAssistantError(f"Invalid energy storage mode: {option}")
 
-        _LOGGER.debug("Setting ES mode to: %s", option)
-        result = await self.coordinator.async_set_es_mode(option)
-
-        if not result:
-            raise HomeAssistantError(f"Failed to set ES mode to {option}")
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return (
-            self.coordinator.last_update_success
-            and self.current_option is not None
-        )
+        _LOGGER.debug("Setting energy storage mode to %s", option)
+        if not await self.coordinator.async_set_es_mode(option):
+            raise HomeAssistantError(f"Failed to set energy storage mode to {option}")

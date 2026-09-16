@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-import logging
 from typing import Any
 
 from homeassistant.components.binary_sensor import (
@@ -11,126 +10,88 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .coordinator import MarstekDataUpdateCoordinator
-
-_LOGGER = logging.getLogger(__name__)
+from .const import DATA_BATTERY, DATA_EM_STATUS, DATA_ES_MODE
+from .coordinator import MarstekConfigEntry, MarstekDataUpdateCoordinator
+from .entity import MarstekEntity, safe_get
 
 
-@dataclass
+@dataclass(frozen=True, kw_only=True)
 class MarstekBinarySensorEntityDescription(BinarySensorEntityDescription):
-    """Describes Marstek binary sensor entity."""
+    """Describes a Marstek binary sensor."""
 
-    value_fn: Callable[[dict[str, Any]], bool | None] | None = None
+    value_fn: Callable[[dict[str, Any]], Any]
 
 
-def _safe_get(data: dict, *keys: str) -> Any:
-    """Safely traverse nested dict keys."""
-    current = data
-    for key in keys:
-        if not isinstance(current, dict):
-            return None
-        current = current.get(key)
-        if current is None:
-            return None
-    return current
+def _ct_connected(data: dict[str, Any]) -> Any:
+    """Return whether the CT / energy meter is connected.
+
+    EM.GetStatus.ct_state is authoritative and always valid. ES.GetMode.ct_state
+    is only meaningful in Auto/AI mode per the API docs, so it is used solely as
+    a fallback when EM.GetStatus went unanswered.
+    """
+    state = safe_get(data, DATA_EM_STATUS, "ct_state")
+    if state is not None:
+        return state
+    return safe_get(data, DATA_ES_MODE, "ct_state")
 
 
 BINARY_SENSOR_TYPES: tuple[MarstekBinarySensorEntityDescription, ...] = (
     MarstekBinarySensorEntityDescription(
         key="battery_charging_allowed",
-        name="Battery Charging Allowed",
+        translation_key="battery_charging_allowed",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-charging-check",
-        value_fn=lambda data: _safe_get(data, "battery", "charg_flag"),
+        value_fn=lambda data: safe_get(data, DATA_BATTERY, "charg_flag"),
     ),
     MarstekBinarySensorEntityDescription(
         key="battery_discharging_allowed",
-        name="Battery Discharging Allowed",
+        translation_key="battery_discharging_allowed",
         device_class=BinarySensorDeviceClass.POWER,
         icon="mdi:battery-minus-check",
-        value_fn=lambda data: _safe_get(data, "battery", "dischrg_flag"),
+        value_fn=lambda data: safe_get(data, DATA_BATTERY, "dischrg_flag"),
     ),
     MarstekBinarySensorEntityDescription(
         key="ct_connected",
-        name="CT Connected",
+        translation_key="ct_connected",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
-        # EM.GetStatus.ct_state is the authoritative source (always valid).
-        # ES.GetMode.ct_state is only meaningful in Auto/AI mode per API docs,
-        # so it's used only as a fallback when EM.GetStatus is unavailable.
-        value_fn=lambda data: _safe_get(data, "em_status", "ct_state") if _safe_get(data, "em_status", "ct_state") is not None else _safe_get(data, "es_mode", "ct_state"),
+        value_fn=_ct_connected,
     ),
 )
 
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    entry: ConfigEntry,
+    entry: MarstekConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Marstek binary sensor based on a config entry."""
-    coordinator: MarstekDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-
+    """Set up Marstek binary sensors from a config entry."""
+    coordinator = entry.runtime_data
     async_add_entities(
-        MarstekBinarySensor(coordinator, description, entry)
+        MarstekBinarySensor(coordinator, description)
         for description in BINARY_SENSOR_TYPES
     )
 
 
-class MarstekBinarySensor(CoordinatorEntity[MarstekDataUpdateCoordinator], BinarySensorEntity):
-    """Representation of a Marstek binary sensor."""
+class MarstekBinarySensor(MarstekEntity, BinarySensorEntity):
+    """A Marstek binary sensor backed by one flag of the polled data."""
 
     entity_description: MarstekBinarySensorEntityDescription
-    _attr_has_entity_name = True
 
     def __init__(
         self,
         coordinator: MarstekDataUpdateCoordinator,
         description: MarstekBinarySensorEntityDescription,
-        entry: ConfigEntry,
     ) -> None:
         """Initialize the binary sensor."""
-        super().__init__(coordinator)
-        self.entity_description = description
-        device_id = entry.unique_id or entry.entry_id
-        self._attr_unique_id = f"{device_id}_{description.key}"
-
-        device_data = coordinator.data.get("device") or {}
-        device_name = device_data.get("device", "Unknown")
-        firmware_ver = device_data.get("ver", "Unknown")
-
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=entry.title,
-            manufacturer="Marstek",
-            model=device_name,
-            sw_version=str(firmware_ver),
-        )
-
-    def _get_value(self) -> bool | None:
-        """Extract value from coordinator data."""
-        if self.entity_description.value_fn is None:
-            return None
-        value = self.entity_description.value_fn(self.coordinator.data)
-        if value is None:
-            return None
-        return bool(value)
+        super().__init__(coordinator, description.key, description)
 
     @property
     def is_on(self) -> bool | None:
-        """Return true if the binary sensor is on."""
-        return self._get_value()
-
-    @property
-    def available(self) -> bool:
-        """Return if entity is available."""
-        return (
-            self.coordinator.last_update_success
-            and self._get_value() is not None
-        )
+        """Return true if the flag is set."""
+        value = self.entity_description.value_fn(self.coordinator.data or {})
+        if value is None:
+            return None
+        return bool(value)

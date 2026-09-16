@@ -1,70 +1,158 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Marstek Battery Storage",
-        "description": "Configure your Marstek device.",
+      "pick_device": {
+        "title": "Select Marstek device",
+        "description": "Devices found on the network. Pick one, or enter an address manually.",
         "data": {
-          "device_ip": "Device IP Address",
-          "device_port": "Device Port"
+          "device_ip": "Device"
+        }
+      },
+      "manual": {
+        "title": "Marstek Battery Storage",
+        "description": "Enter the address of your Marstek device.",
+        "data": {
+          "device_ip": "IP address",
+          "device_port": "UDP port"
         },
         "data_description": {
-          "device_ip": "Enter the IP address of your Marstek device (e.g., 192.168.2.178)",
-          "device_port": "UDP port for API communication (default: 30000)"
+          "device_ip": "IP address of the device, e.g. 192.168.2.178.",
+          "device_port": "UDP port the device serves the Open API on (default: 30000)."
         }
       },
       "reconfigure": {
-        "title": "Reconfigure Marstek Device",
-        "description": "Update the connection settings for your Marstek device.",
+        "title": "Reconfigure Marstek device",
+        "description": "Update the connection settings.",
         "data": {
-          "device_ip": "Device IP Address",
-          "device_port": "Device Port"
+          "device_ip": "IP address",
+          "device_port": "UDP port"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to the device.\n\nPlease check:\n\u2022 IP address is correct\n\u2022 Device is powered on\n\u2022 Device is on the same network\n\u2022 UDP port is not blocked by firewall\n\nCheck Home Assistant logs for details.",
-      "invalid_device": "Device connected but did not return valid information.\n\nThe device might:\n\u2022 Not be a Marstek device\n\u2022 Use a different protocol version\n\u2022 Require firmware update\n\nCheck Home Assistant logs for details.",
-      "unknown": "An unexpected error occurred.\n\nPlease check Home Assistant logs for details."
+      "cannot_connect": "No response from the device. Check the IP address, port and power, and that the Open API is enabled on the device.",
+      "invalid_device": "The device answered but returned no valid identifier. It may not be a Marstek device, or it runs older firmware.",
+      "unknown": "Unexpected error. Please check the Home Assistant logs."
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "reconfigure_successful": "Configuration updated successfully."
+      "reconfigure_successful": "Configuration updated.",
+      "wrong_device": "A different Marstek device answered at this address. Please add it as its own entry."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Marstek options",
+        "data": {
+          "scan_interval": "Polling interval",
+          "min_write_interval": "Minimum interval between writes"
+        },
+        "data_description": {
+          "scan_interval": "How often the device is polled. Below 5 s the device starts dropping requests.",
+          "min_write_interval": "Lower bound on the spacing of two ES.SetMode commands. Protects the device when passive setpoints are pushed frequently. 0 disables the limit."
+        }
+      }
     }
   },
   "entity": {
     "sensor": {
-      "battery_soc": { "name": "Battery State of Charge" },
-      "battery_temperature": { "name": "Battery Temperature" },
-      "battery_capacity": { "name": "Battery Capacity" },
-      "battery_rated_capacity": { "name": "Battery Rated Capacity" },
-      "es_mode": { "name": "Energy Storage Mode" },
-      "grid_power": { "name": "Grid Power" },
-      "battery_charging_power": { "name": "Battery Charging Power" },
-      "battery_discharging_power": { "name": "Battery Discharging Power" },
-      "offgrid_power": { "name": "Off-Grid Power" },
-      "phase_a_power": { "name": "Phase A Power" },
-      "phase_b_power": { "name": "Phase B Power" },
-      "phase_c_power": { "name": "Phase C Power" },
-      "total_power": { "name": "Total Power" },
-      "input_energy": { "name": "Cumulative Input Energy" },
-      "output_energy": { "name": "Cumulative Output Energy" },
-      "pv_power": { "name": "Solar Power" },
-      "total_pv_energy": { "name": "Total Solar Energy" },
-      "total_grid_output_energy": { "name": "Total Grid Output Energy" },
-      "total_grid_input_energy": { "name": "Total Grid Input Energy" },
-      "total_load_energy": { "name": "Total Load Energy" },
-      "firmware_version": { "name": "Firmware Version" },
-      "wifi_ssid": { "name": "WiFi SSID" }
+      "battery_soc": {
+        "name": "Battery state of charge"
+      },
+      "battery_temperature": {
+        "name": "Battery temperature"
+      },
+      "battery_capacity": {
+        "name": "Battery capacity"
+      },
+      "battery_rated_capacity": {
+        "name": "Battery rated capacity"
+      },
+      "es_battery_soc": {
+        "name": "State of charge (inverter)"
+      },
+      "es_battery_capacity": {
+        "name": "Capacity (inverter)"
+      },
+      "battery_power": {
+        "name": "Battery power"
+      },
+      "battery_charging_power": {
+        "name": "Charging power"
+      },
+      "battery_discharging_power": {
+        "name": "Discharging power"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "offgrid_power": {
+        "name": "Off-grid power"
+      },
+      "pv_power": {
+        "name": "Solar power"
+      },
+      "total_pv_energy": {
+        "name": "Total solar energy"
+      },
+      "total_grid_output_energy": {
+        "name": "Total grid output energy"
+      },
+      "total_grid_input_energy": {
+        "name": "Total grid input energy"
+      },
+      "total_load_energy": {
+        "name": "Total load energy"
+      },
+      "phase_a_power": {
+        "name": "Phase A power"
+      },
+      "phase_b_power": {
+        "name": "Phase B power"
+      },
+      "phase_c_power": {
+        "name": "Phase C power"
+      },
+      "meter_total_power": {
+        "name": "Meter total power"
+      },
+      "meter_input_energy": {
+        "name": "Meter input energy"
+      },
+      "meter_output_energy": {
+        "name": "Meter output energy"
+      },
+      "es_mode": {
+        "name": "Energy storage mode"
+      },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
+      "wifi_ssid": {
+        "name": "Wi-Fi SSID"
+      },
+      "wifi_rssi": {
+        "name": "Wi-Fi signal strength"
+      },
+      "wifi_ip": {
+        "name": "Wi-Fi IP address"
+      }
     },
     "binary_sensor": {
-      "battery_charging_allowed": { "name": "Battery Charging Allowed" },
-      "battery_discharging_allowed": { "name": "Battery Discharging Allowed" },
-      "ct_connected": { "name": "CT Connected" }
+      "battery_charging_allowed": {
+        "name": "Charging allowed"
+      },
+      "battery_discharging_allowed": {
+        "name": "Discharging allowed"
+      },
+      "ct_connected": {
+        "name": "CT connected"
+      }
     },
     "select": {
       "es_mode_select": {
-        "name": "Energy Storage Mode",
+        "name": "Energy storage mode",
         "state": {
           "Auto": "Auto",
           "AI": "AI",
@@ -75,11 +163,39 @@
       }
     },
     "number": {
-      "dod": { "name": "Depth of Discharge" }
+      "dod": {
+        "name": "Depth of discharge"
+      },
+      "passive_power": {
+        "name": "Passive power setpoint"
+      },
+      "passive_cd_time": {
+        "name": "Passive countdown"
+      }
     },
     "switch": {
-      "led": { "name": "LED" },
-      "bluetooth": { "name": "Bluetooth" }
+      "led": {
+        "name": "LED"
+      },
+      "bluetooth": {
+        "name": "Bluetooth"
+      }
+    }
+  },
+  "services": {
+    "set_passive_power": {
+      "name": "Set passive power",
+      "description": "Switches the device into Passive mode and sets the power setpoint and countdown in one command. Once the countdown elapses the device leaves Passive mode on its own.",
+      "fields": {
+        "power": {
+          "name": "Power",
+          "description": "Power setpoint in watts. Positive discharges the battery, negative charges it."
+        },
+        "cd_time": {
+          "name": "Countdown",
+          "description": "Seconds after which the device leaves Passive mode if no new command arrives. Use roughly two to three times the interval at which setpoints are pushed."
+        }
+      }
     }
   }
 }
