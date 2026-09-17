@@ -121,6 +121,16 @@ Die Integration rechnet das für alle Leistungsfelder zurück.
 3.0). Fällt es weg, wird die AC-seitige `ongrid_power` als Ersatz verwendet; sie
 trägt dasselbe Vorzeichen, unterscheidet sich aber um die Wandlungsverluste.
 
+### Plausibilitätsprüfung
+
+Das Gerät antwortet gelegentlich mit Unsinn – auf einer Venus E 3.0 wurden
+einige Male pro Tag eine Batterietemperatur von 5,4·10¹⁰ °C und eine Kapazität
+von 5,4·10¹² Wh beobachtet, zwischen ansonsten sauberen Messwerten. Jeder
+numerische Sensor hat deshalb einen Plausibilitätsbereich; Werte außerhalb
+werden verworfen, der vorherige Wert bleibt stehen und eine Warnung landet im
+Log. Besonders wichtig ist das für die `TOTAL_INCREASING`-Zähler: Ein einziger
+Ausreißer würde sich dort dauerhaft ins Energie-Dashboard schreiben.
+
 Wenig gebräuchliche und modellabhängige Sensoren (Solar, Inselnetz, doppelte
 Ladezustände) sind standardmäßig deaktiviert und lassen sich in der UI
 einschalten.

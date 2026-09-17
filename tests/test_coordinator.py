@@ -26,7 +26,14 @@ def _sample_data(mode: str = "Auto") -> dict:
     """Return one plausible poll result."""
     return {
         "device": {"device": "VenusE", "ver": 150, "ble_mac": "aabbcc"},
-        "battery": {"soc": 61, "bat_temp": 24, "charg_flag": 1, "dischrg_flag": 1},
+        "battery": {
+            "soc": 61,
+            "bat_temp": 24,
+            "bat_capacity": 5120,
+            "rated_capacity": 5120,
+            "charg_flag": 1,
+            "dischrg_flag": 1,
+        },
         "es_mode": {"mode": mode},
         "es_status": {
             "bat_soc": 61,
@@ -249,3 +256,51 @@ async def test_selecting_passive_carries_current_setpoint(
 
     api.set_passive_power.assert_awaited_once_with(-500, 60)
     api.set_es_mode.assert_not_awaited()
+
+
+async def test_implausible_reading_is_discarded(hass: HomeAssistant, entry, api) -> None:
+    """Garbage from the device must not reach the sensors.
+
+    The Venus E 3.0 answers Bat.GetStatus with absurd values a few times a day
+    (observed: a battery temperature of 5.4e10 and a capacity of 5.4e12 Wh).
+    The previous good reading is kept instead.
+    """
+    assert hass.states.get("sensor.venus_e_battery_temperature").state == "24.0"
+
+    data = _sample_data()
+    data["battery"]["bat_temp"] = 53690374836
+    data["battery"]["bat_capacity"] = 5369097404899
+    api.get_all_data.return_value = data
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.venus_e_battery_temperature").state == "24.0"
+    assert hass.states.get("sensor.venus_e_battery_capacity").state == "5120"
+
+    # A sane reading afterwards is accepted again.
+    data = _sample_data()
+    data["battery"]["bat_temp"] = 31
+    api.get_all_data.return_value = data
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert hass.states.get("sensor.venus_e_battery_temperature").state == "31.0"
+
+
+async def test_implausible_energy_counter_is_discarded(
+    hass: HomeAssistant, entry, api
+) -> None:
+    """A spike in a TOTAL_INCREASING counter would corrupt the Energy dashboard."""
+    assert (
+        hass.states.get("sensor.venus_e_total_grid_input_energy").state == "12.345"
+    )
+
+    data = _sample_data()
+    data["es_status"]["total_grid_input_energy"] = 5369097404899
+    api.get_all_data.return_value = data
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert (
+        hass.states.get("sensor.venus_e_total_grid_input_energy").state == "12.345"
+    )

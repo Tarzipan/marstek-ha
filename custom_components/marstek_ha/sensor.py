@@ -43,6 +43,15 @@ class MarstekSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[dict[str, Any]], Any]
 
+    # Inclusive plausibility bounds for the finished value. The device
+    # occasionally answers with garbage -- observed on a Venus E 3.0 as a
+    # battery temperature of 5.4e10 degrees and a battery capacity of 5.4e12 Wh
+    # a handful of times a day, between otherwise sane readings. A reading
+    # outside these bounds is discarded and the previous one kept, which
+    # matters most for the TOTAL_INCREASING counters: a single spike there
+    # would be written into the Energy dashboard permanently.
+    valid_range: tuple[float, float] | None = None
+
 
 def _scaled(factor: float, *keys: str) -> Callable[[dict[str, Any]], Any]:
     """Build a value function that multiplies a raw field by a fixed factor."""
@@ -146,6 +155,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_soc",
         translation_key="battery_soc",
+        valid_range=(0, 100),
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
@@ -154,6 +164,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_temperature",
         translation_key="battery_temperature",
+        valid_range=(-40, 100),
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -162,6 +173,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_capacity",
         translation_key="battery_capacity",
+        valid_range=(0, 100_000),
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY_STORAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -171,6 +183,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_rated_capacity",
         translation_key="battery_rated_capacity",
+        valid_range=(0, 100_000),
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY_STORAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -181,6 +194,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="es_battery_soc",
         translation_key="es_battery_soc",
+        valid_range=(0, 100),
         native_unit_of_measurement=PERCENTAGE,
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
@@ -192,6 +206,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="es_battery_capacity",
         translation_key="es_battery_capacity",
+        valid_range=(0, 100_000),
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY_STORAGE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -201,6 +216,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_power",
         translation_key="battery_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -210,6 +226,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_charging_power",
         translation_key="battery_charging_power",
+        valid_range=(0, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -219,6 +236,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="battery_discharging_power",
         translation_key="battery_discharging_power",
+        valid_range=(0, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -228,6 +246,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="grid_power",
         translation_key="grid_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -236,6 +255,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="offgrid_power",
         translation_key="offgrid_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -245,6 +265,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="pv_power",
         translation_key="pv_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -260,6 +281,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="total_pv_energy",
         translation_key="total_pv_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -271,6 +293,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="total_grid_output_energy",
         translation_key="total_grid_output_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -280,6 +303,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="total_grid_input_energy",
         translation_key="total_grid_input_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -289,6 +313,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="total_load_energy",
         translation_key="total_load_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -302,6 +327,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="phase_a_power",
         translation_key="phase_a_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -310,6 +336,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="phase_b_power",
         translation_key="phase_b_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -318,6 +345,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="phase_c_power",
         translation_key="phase_c_power",
+        valid_range=(-30_000, 30_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -326,6 +354,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="meter_total_power",
         translation_key="meter_total_power",
+        valid_range=(-90_000, 90_000),
         native_unit_of_measurement=UnitOfPower.WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
@@ -334,6 +363,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="meter_input_energy",
         translation_key="meter_input_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -343,6 +373,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="meter_output_energy",
         translation_key="meter_output_energy",
+        valid_range=(0, 1_000_000),
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -374,6 +405,7 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
     MarstekSensorEntityDescription(
         key="wifi_rssi",
         translation_key="wifi_rssi",
+        valid_range=(-120, 0),
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -414,8 +446,24 @@ class MarstekSensor(MarstekEntity, SensorEntity):
     ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, description.key, description)
+        self._last_valid: Any = None
 
     @property
     def native_value(self) -> Any:
-        """Return the sensor value."""
-        return self.entity_description.value_fn(self.coordinator.data or {})
+        """Return the sensor value, ignoring implausible readings."""
+        value = self.entity_description.value_fn(self.coordinator.data or {})
+
+        bounds = self.entity_description.valid_range
+        if value is not None and bounds is not None:
+            low, high = bounds
+            if not low <= value <= high:
+                _LOGGER.warning(
+                    "Discarding implausible %s reading %s (expected %s..%s); "
+                    "keeping previous value %s",
+                    self.entity_id, value, low, high, self._last_valid,
+                )
+                return self._last_valid
+
+        if value is not None:
+            self._last_valid = value
+        return value
