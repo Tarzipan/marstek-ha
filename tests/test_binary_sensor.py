@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.marstek_ha.binary_sensor import (
     BINARY_SENSOR_TYPES,
     MarstekBinarySensor,
