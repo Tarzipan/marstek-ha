@@ -17,9 +17,13 @@ from custom_components.marstek_ha.const import (
     CONF_DEVICE_IP,
     CONF_DEVICE_PORT,
     CONF_MIN_WRITE_INTERVAL,
+    CONF_MODBUS_ENABLED,
+    CONF_MODBUS_PORT,
+    CONF_MODBUS_UNIT_ID,
     DOMAIN,
     MAX_CONSECUTIVE_FAILURES,
 )
+from custom_components.marstek_ha.coordinator import MarstekDataUpdateCoordinator
 
 
 def _sample_data(mode: str = "Auto") -> dict:
@@ -304,3 +308,58 @@ async def test_implausible_energy_counter_is_discarded(
     assert (
         hass.states.get("sensor.venus_e_total_grid_input_energy").state == "12.345"
     )
+
+
+async def test_modbus_channel_is_off_unless_enabled(hass: HomeAssistant) -> None:
+    """The Modbus writer must not exist -- and no entities with it -- by default.
+
+    The device serves one Modbus session and locks up under frequent access, so
+    the channel opting itself in would be a real hazard rather than a nicety.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_DEVICE_IP: "192.0.2.10", CONF_DEVICE_PORT: 30000},
+        unique_id="aabbcc",
+    )
+    entry.add_to_hass(hass)
+
+    coordinator = MarstekDataUpdateCoordinator(hass, entry)
+    assert coordinator.modbus is None
+    assert coordinator.modbus_settings_changed is False
+
+
+async def test_modbus_channel_uses_the_configured_endpoint(hass: HomeAssistant) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_DEVICE_IP: "192.0.2.10", CONF_DEVICE_PORT: 30000},
+        options={
+            CONF_MODBUS_ENABLED: True,
+            CONF_MODBUS_PORT: 5020,
+            CONF_MODBUS_UNIT_ID: 3,
+        },
+        unique_id="aabbcc",
+    )
+    entry.add_to_hass(hass)
+
+    coordinator = MarstekDataUpdateCoordinator(hass, entry)
+    assert coordinator.modbus is not None
+    # The Modbus endpoint shares the device's address but not its UDP port.
+    assert coordinator.modbus.host == "192.0.2.10"
+    assert coordinator.modbus.port == 5020
+    assert coordinator.modbus.unit_id == 3
+
+
+async def test_changing_the_modbus_options_is_detected(hass: HomeAssistant) -> None:
+    """Whether the limit entities exist is fixed at setup, so a change needs a reload."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_DEVICE_IP: "192.0.2.10", CONF_DEVICE_PORT: 30000},
+        unique_id="aabbcc",
+    )
+    entry.add_to_hass(hass)
+
+    coordinator = MarstekDataUpdateCoordinator(hass, entry)
+    assert coordinator.modbus_settings_changed is False
+
+    hass.config_entries.async_update_entry(entry, options={CONF_MODBUS_ENABLED: True})
+    assert coordinator.modbus_settings_changed is True

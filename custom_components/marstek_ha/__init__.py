@@ -154,8 +154,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: MarstekConfigEntry) -> b
 async def _async_options_updated(
     hass: HomeAssistant, entry: MarstekConfigEntry
 ) -> None:
-    """Apply changed options without tearing the entry down."""
+    """Apply changed options, reloading only when that is unavoidable."""
     coordinator = entry.runtime_data
+
+    # Whether the Modbus power limit entities exist, and which endpoint they
+    # talk to, is decided when the platforms are set up. Changing that needs a
+    # reload; everything else can be applied in place.
+    if coordinator.modbus_settings_changed:
+        await hass.config_entries.async_reload(entry.entry_id)
+        return
+
     coordinator.async_update_interval()
     await coordinator.async_request_refresh()
 

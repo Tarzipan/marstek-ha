@@ -10,10 +10,10 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DATA_BATTERY, DATA_EM_STATUS, DATA_ES_MODE
+from .const import BINARY_FLAG_DEBOUNCE, DATA_BATTERY, DATA_EM_STATUS, DATA_ES_MODE
 from .coordinator import MarstekConfigEntry, MarstekDataUpdateCoordinator
 from .entity import MarstekEntity, safe_get
 
@@ -76,7 +76,25 @@ async def async_setup_entry(
 
 
 class MarstekBinarySensor(MarstekEntity, BinarySensorEntity):
-    """A Marstek binary sensor backed by one flag of the polled data."""
+    """A Marstek binary sensor backed by one flag of the polled data.
+
+    The reported value is debounced: a flag only changes once the device has
+    reported the new value on BINARY_FLAG_DEBOUNCE consecutive polls. See the
+    comment on that constant for the measurements behind it.
+
+    The flags here are latched summaries of hardware state -- a CT is plugged
+    in or it is not, charging is permitted or it is not -- and none of them can
+    genuinely toggle and toggle back inside a poll cycle. A lone deviating
+    reading is therefore noise, and publishing it is actively harmful: a
+    "CT lost" that lasts ten seconds sends automations chasing a fault that
+    never happened, and a flapping charge-permission flag invites exactly the
+    wrong diagnosis when charging really does stop.
+
+    Note what this does NOT do: it never invents a value. Until the device has
+    reported anything the sensor is unknown, and a device that stops answering
+    altogether is handled by the coordinator, which marks every entity
+    unavailable after MAX_CONSECUTIVE_FAILURES empty polls.
+    """
 
     entity_description: MarstekBinarySensorEntityDescription
 
@@ -87,11 +105,65 @@ class MarstekBinarySensor(MarstekEntity, BinarySensorEntity):
     ) -> None:
         """Initialize the binary sensor."""
         super().__init__(coordinator, description.key, description)
+        # The value currently published, and how many polls in a row have
+        # disagreed with it.
+        self._reported: bool | None = None
+        self._pending: bool | None = None
+        self._pending_count = 0
+
+    async def async_added_to_hass(self) -> None:
+        """Seed the filter from whatever the coordinator already holds."""
+        self._advance()
+        await super().async_added_to_hass()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Advance the filter once per poll, then publish."""
+        self._advance()
+        super()._handle_coordinator_update()
+
+    def _advance(self) -> None:
+        """Feed one poll's reading into the debounce filter.
+
+        Called exactly once per coordinator update. The counting deliberately
+        does not live in the is_on property: Home Assistant may read a property
+        several times for one state write, which would make each poll count
+        more than once and quietly shorten the debounce.
+        """
+        raw = self.entity_description.value_fn(self.coordinator.data or {})
+
+        if raw is None:
+            # No reading at all. Hold whatever was last published rather than
+            # blanking the entity, and do not let the gap count towards a
+            # pending change either way.
+            return
+
+        value = bool(raw)
+
+        if value == self._reported:
+            # Back in agreement -- discard any change that was building up.
+            self._pending = None
+            self._pending_count = 0
+            return
+
+        if self._reported is None:
+            # First ever reading: publish it immediately. Debouncing the very
+            # first value would only leave the entity unknown for no reason.
+            self._reported = value
+            return
+
+        if value != self._pending:
+            self._pending = value
+            self._pending_count = 1
+        else:
+            self._pending_count += 1
+
+        if self._pending_count >= BINARY_FLAG_DEBOUNCE:
+            self._reported = value
+            self._pending = None
+            self._pending_count = 0
 
     @property
     def is_on(self) -> bool | None:
-        """Return true if the flag is set."""
-        value = self.entity_description.value_fn(self.coordinator.data or {})
-        if value is None:
-            return None
-        return bool(value)
+        """Return the debounced flag."""
+        return self._reported

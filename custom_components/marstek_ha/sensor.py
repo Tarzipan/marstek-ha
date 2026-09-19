@@ -113,23 +113,43 @@ def _battery_power(data: dict[str, Any]) -> float | None:
     return _as_signed16(raw)
 
 
-# Firmware build at which bat_temp is reported directly in degrees Celsius.
-# Older builds scaled the value by ten (e.g. 250 meaning 25.0 C).
-_BAT_TEMP_DIRECT_FW = 147
+# Threshold that separates the two scalings Bat.GetStatus.bat_temp is reported
+# in. Below it the raw value is whole degrees Celsius, at or above it, tenths.
+#
+# The scaling varies between units running the same integration, and getting it
+# wrong is not cosmetic: a real 27 C shown as 2.7 C looks exactly like a battery
+# too cold to charge, which is when the device withholds charge permission
+# anyway -- so the wrong reading corroborates the wrong diagnosis.
+#
+# Magnitude, not firmware version, decides. An earlier revision keyed this off
+# the firmware build, and measurement disproved that: a Venus E 3.0 on build 144
+# and one on build 150 both report whole degrees, so no threshold on the version
+# separates the two cases. There is also no reason to expect the vendor to keep
+# such a split monotonic across future builds.
+#
+# 100 is the safe place to cut because the two ranges cannot overlap in
+# practice. A home storage battery operates roughly between -20 C and 60 C: as
+# whole degrees that is at most 60, as tenths at least 100 for anything from
+# 10.0 C upwards. The only ambiguous band is a tenths-scaled reading below
+# 10.0 C, which arrives as a raw value under 100 and is then read as whole
+# degrees -- a genuine 8.5 C shown as 85 C. That misreads high, towards a
+# temperature the plausibility check below rejects outright, rather than low
+# towards the dangerous "too cold to charge" reading this replaces.
+_BAT_TEMP_TENTHS_THRESHOLD = 100
 
 
 def _battery_temperature(data: dict[str, Any]) -> float | None:
-    """Return battery temperature in C, handling firmware-dependent scaling."""
+    """Return battery temperature in C, detecting the scaling from magnitude."""
     raw = safe_get(data, DATA_BATTERY, "bat_temp")
     if raw is None:
         return None
-    firmware = safe_get(data, DATA_DEVICE, "ver")
     try:
-        if firmware is not None and int(firmware) >= _BAT_TEMP_DIRECT_FW:
-            return float(raw)
+        value = float(raw)
     except (TypeError, ValueError):
-        pass
-    return float(raw) / 10.0
+        return None
+    if abs(value) < _BAT_TEMP_TENTHS_THRESHOLD:
+        return value
+    return value / 10.0
 
 
 def _battery_power_direction(discharging: bool) -> Callable[[dict[str, Any]], Any]:
@@ -392,7 +412,9 @@ SENSOR_TYPES: tuple[MarstekSensorEntityDescription, ...] = (
         key="firmware_version",
         translation_key="firmware_version",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default: it is the first thing worth comparing when two
+        # units behave differently under identical code, and it being off by
+        # default made one unit look like it had no firmware sensor at all.
         value_fn=_plain(DATA_DEVICE, "ver"),
     ),
     MarstekSensorEntityDescription(

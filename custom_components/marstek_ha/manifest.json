@@ -9,7 +9,9 @@
   "integration_type": "device",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/Tarzipan/marstek-ha/issues",
-  "requirements": [],
+  "requirements": [
+    "pymodbus>=3.9.2"
+  ],
   "single_config_entry": false,
-  "version": "0.5.3"
+  "version": "0.6.0"
 }

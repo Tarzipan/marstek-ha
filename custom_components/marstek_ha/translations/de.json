@@ -46,11 +46,17 @@
         "title": "Marstek-Optionen",
         "data": {
           "scan_interval": "Abfrageintervall",
-          "min_write_interval": "Mindestabstand zwischen Schreibbefehlen"
+          "min_write_interval": "Mindestabstand zwischen Schreibbefehlen",
+          "modbus_enabled": "Modbus-TCP für Leistungsgrenzen aktivieren",
+          "modbus_port": "Modbus-TCP-Port",
+          "modbus_unit_id": "Modbus-Unit-ID"
         },
         "data_description": {
           "scan_interval": "Wie oft das Gerät abgefragt wird. Werte unter 5 s führen zu verworfenen Anfragen.",
-          "min_write_interval": "Untergrenze für den Abstand zweier ES.SetMode-Befehle. Schützt das Gerät, wenn Passiv-Sollwerte häufig nachgeführt werden. 0 deaktiviert die Begrenzung."
+          "min_write_interval": "Untergrenze für den Abstand zweier ES.SetMode-Befehle. Schützt das Gerät, wenn Passiv-Sollwerte häufig nachgeführt werden. 0 deaktiviert die Begrenzung.",
+          "modbus_enabled": "Schaltet zwei zusätzliche Entitäten für die maximale Lade- und Entladeleistung frei. Diese werden per Modbus TCP geschrieben, weil die Open API keinen Befehl dafür kennt; alles andere bleibt bei UDP. Achtung: Das Gerät bedient nur EINE Modbus-Sitzung und hängt sich bei häufigen Zugriffen auf. Es darf daher keine zweite Modbus-Integration auf dasselbe Gerät zugreifen.",
+          "modbus_port": "TCP-Port des Modbus-Servers im Gerät (Standard: 502).",
+          "modbus_unit_id": "Modbus-Unit-/Slave-ID des Geräts (Standard: 1)."
         }
       }
     }
@@ -171,6 +177,12 @@
       },
       "passive_cd_time": {
         "name": "Passiv-Countdown"
+      },
+      "max_charge_power": {
+        "name": "Max. Ladeleistung"
+      },
+      "max_discharge_power": {
+        "name": "Max. Entladeleistung"
       }
     },
     "switch": {

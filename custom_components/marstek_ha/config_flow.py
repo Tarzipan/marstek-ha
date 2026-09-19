@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -24,6 +25,9 @@ from .const import (
     CONF_DEVICE_IP,
     CONF_DEVICE_PORT,
     CONF_MIN_WRITE_INTERVAL,
+    CONF_MODBUS_ENABLED,
+    CONF_MODBUS_PORT,
+    CONF_MODBUS_UNIT_ID,
     CONF_SCAN_INTERVAL,
     DEFAULT_MIN_WRITE_INTERVAL,
     DEFAULT_PORT,
@@ -33,6 +37,8 @@ from .const import (
     MIN_SCAN_INTERVAL,
     MIN_WRITE_INTERVAL_MAX,
     MIN_WRITE_INTERVAL_MIN,
+    MODBUS_DEFAULT_PORT,
+    MODBUS_DEFAULT_UNIT_ID,
 )
 from .marstek_api import MarstekAPI, async_discover_devices
 
@@ -223,6 +229,9 @@ class MarstekOptionsFlow(OptionsFlow):
                 data={
                     CONF_SCAN_INTERVAL: int(user_input[CONF_SCAN_INTERVAL]),
                     CONF_MIN_WRITE_INTERVAL: int(user_input[CONF_MIN_WRITE_INTERVAL]),
+                    CONF_MODBUS_ENABLED: bool(user_input[CONF_MODBUS_ENABLED]),
+                    CONF_MODBUS_PORT: int(user_input[CONF_MODBUS_PORT]),
+                    CONF_MODBUS_UNIT_ID: int(user_input[CONF_MODBUS_UNIT_ID]),
                 }
             )
 
@@ -255,6 +264,23 @@ class MarstekOptionsFlow(OptionsFlow):
                         mode=NumberSelectorMode.BOX,
                     )
                 ),
+                # The Modbus channel exists solely for the charge and discharge
+                # power limits, which the UDP Open API does not expose. Off by
+                # default: the device serves only one Modbus session and is
+                # known to lock up under frequent access, so it is not something
+                # to enable without meaning to. See modbus.py.
+                vol.Required(
+                    CONF_MODBUS_ENABLED,
+                    default=options.get(CONF_MODBUS_ENABLED, False),
+                ): BooleanSelector(),
+                vol.Required(
+                    CONF_MODBUS_PORT,
+                    default=options.get(CONF_MODBUS_PORT, MODBUS_DEFAULT_PORT),
+                ): cv.port,
+                vol.Required(
+                    CONF_MODBUS_UNIT_ID,
+                    default=options.get(CONF_MODBUS_UNIT_ID, MODBUS_DEFAULT_UNIT_ID),
+                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=255)),
             }
         )
 

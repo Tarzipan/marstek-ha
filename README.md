@@ -44,6 +44,8 @@ Unter **Konfigurieren** lassen sich je Gerät einstellen:
 | --- | --- | --- |
 | Abfrageintervall | 10 s | Wie oft das Gerät gepollt wird. Unter 5 s verwirft das Gerät Anfragen. |
 | Mindestabstand zwischen Schreibbefehlen | 5 s | Untergrenze für den Abstand zweier `ES.SetMode`-Befehle. |
+| Modbus TCP für Leistungsgrenzen | aus | Schaltet die Entitäten für die Lade- und Entladeleistungsgrenze frei – siehe [Leistungsgrenzen](#leistungsgrenzen-max-lade--und-entladeleistung). |
+| Modbus-Port / Unit-ID | 502 / 1 | Nur relevant, wenn der Modbus-Kanal aktiv ist. |
 
 ## Betriebsarten
 
@@ -121,6 +123,23 @@ Die Integration rechnet das für alle Leistungsfelder zurück.
 3.0). Fällt es weg, wird die AC-seitige `ongrid_power` als Ersatz verwendet; sie
 trägt dasselbe Vorzeichen, unterscheidet sich aber um die Wandlungsverluste.
 
+### Temperatur-Skalierung
+
+`Bat.GetStatus.bat_temp` kommt je nach Gerät in ganzen Grad oder in Zehntelgrad
+– und zwar zwischen Einheiten, die denselben Code fahren. Die Integration
+entscheidet das anhand der **Größenordnung**: Rohwerte unter 100 sind ganze
+Grad, ab 100 Zehntelgrad. Die beiden Bereiche können sich praktisch nicht
+überschneiden, weil ein Hausspeicher etwa zwischen −20 °C und 60 °C arbeitet.
+
+Die Firmware-Version taugt dafür **nicht**, auch wenn es naheliegt: Gemessen
+liefern eine Venus E 3.0 mit Build 144 und eine mit Build 150 beide ganze Grad,
+es gibt also keine Schwelle, die die Fälle trennt.
+
+Das ist keine Kosmetik. Ein echter Wert von 27 °C, fälschlich als 2,7 °C
+angezeigt, sieht exakt nach einer zu kalten Batterie aus – also nach genau dem
+Zustand, in dem das Gerät die Ladefreigabe entzieht. Der falsche Messwert
+bestätigt dann die falsche Diagnose.
+
 ### Plausibilitätsprüfung
 
 Das Gerät antwortet gelegentlich mit Unsinn – auf einer Venus E 3.0 wurden
@@ -152,6 +171,65 @@ Laden erlaubt, Entladen erlaubt, Stromwandler verbunden.
 `DOD.SET`, LED und Bluetooth bieten laut API keinen Leseweg. Der zuletzt
 geschriebene Wert wird angezeigt und über Neustarts hinweg wiederhergestellt.
 
+### Leistungsgrenzen (Max. Lade- und Entladeleistung)
+
+> Standardmäßig **deaktiviert**. Vor dem Einschalten den Abschnitt bis zum Ende
+> lesen – der Modbus-Server der Venus ist empfindlich.
+
+Die Open API (Rev 3.1) kennt **keinen** Befehl für eine Lade- oder
+Entladeleistungs*grenze*. Das nächstgelegene, `passive_cfg.power`, ist ein
+Arbeitspunkt und keine Obergrenze: Es zu setzen nimmt das Gerät aus dem
+Auto-Modus und damit aus seiner eigenen, sekündlichen Regelung gegen den
+Stromwandler. Genau die will man aber behalten.
+
+Dieselben Geräte stellen beide Grenzen über **Modbus TCP** als Holding-Register
+bereit (44002 und 44003, `uint16`, Watt, 0–2500). Die Integration schreibt sie
+dort; alles andere bleibt bei UDP.
+
+**Anwendungsfall.** Steht die Ladegrenze nachts auf 0 W, kann ein Gerät im
+Auto-Modus nicht mehr laden, regelt seine Entladung aber unverändert weiter.
+Das unterbindet das Muster, bei dem eine wegfallende Last das Gerät kurz ins
+Netz drücken lässt und es diese Energie eine Sekunde später selbst wieder
+einlädt – zweimal gewandelt, ohne Gegenwert. Sobald PV-Leistung anliegt, setzt
+eine Automatisierung die Grenze zurück auf 2500 W.
+
+```yaml
+action: number.set_value
+target:
+  entity_id: number.marstek_1_max_ladeleistung
+data:
+  value: 0
+```
+
+**Warum der Kanal so zurückhaltend gebaut ist.** Der Modbus-Server der Venus
+bedient nur **eine** Sitzung und hängt sich bei häufigen Zugriffen auf –
+beobachtet bis zum Punkt, an dem nur ein Neustart des Geräts hilft. Daraus
+folgt alles Weitere:
+
+- Verbinden, schreiben, trennen – bei jedem Schreibvorgang. Die Sitzung wird nie
+  offen gehalten.
+- **Kein Polling.** Die Register werden genau einmal gelesen, beim Laden des
+  Eintrags, damit die Entitäten den tatsächlichen Gerätezustand zeigen.
+- Ein unveränderter Wert öffnet gar keine Verbindung.
+- Mindestabstand von 60 s zwischen zwei Zugriffen, der **abweist statt
+  einzureihen**: Eine fehlerhafte Automatisierung soll im Trace scheitern und
+  keinen Rückstau aufbauen.
+- Kein Retry bei Timeout. Ein Server, der nicht mehr antwortet, wird durch
+  Nachsetzen nicht besser.
+
+Der Mindestabstand gilt auch gegenüber dem Lesezugriff beim Start: Direkt nach
+einem Neustart von Home Assistant wird ein Schreibversuch in der ersten Minute
+abgewiesen. Das ist Absicht – es ist derselbe Zugriff auf dieselbe eine Sitzung.
+
+**Es darf kein zweiter Modbus-Client auf dasselbe Gerät zugreifen.** Wer parallel
+eine andere Marstek-Modbus-Integration betreibt, legt beide lahm. Diese vor dem
+Einschalten entfernen.
+
+Die Register leben im Gerät und überstehen einen Neustart von Home Assistant von
+selbst, deshalb stellen diese beiden Entitäten – anders als die übrigen
+Schreib-Entitäten – ihren Wert nicht aus dem Recorder wieder her, sondern lesen
+ihn beim Start vom Gerät.
+
 ## Verhalten bei Paketverlust
 
 UDP ist verbindungslos: Einzelne verlorene Antworten sind normal. Die
@@ -173,6 +251,39 @@ Integration fängt das ab, statt Entitäten flackern zu lassen:
 - Ein Poll ist auf die Dauer eines Abfrageintervalls begrenzt, damit ein
   stummes Gerät keine Abfragen auflaufen lässt.
 
+### Entprellung der Binary Sensoren
+
+Die Binary Sensoren melden verrastete Hardware-Zustände: Ein Stromwandler ist
+angeschlossen oder nicht, Laden ist freigegeben oder nicht. Keiner davon kippt
+im Sekundenbereich hin und her. Trotzdem liefert das Gerät gelegentlich einen
+einzelnen abweichenden Messwert – auf einer Venus E 3.0 mit Stromwandler 135
+solcher Ausreißer bei `ct_state` in zwölf Stunden, fast alle genau einen
+Poll-Zyklus lang, bei durchgehend angeschlossenem Wandler.
+
+Ein Wechsel wird deshalb erst gemeldet, wenn das Gerät den neuen Wert in **drei
+aufeinanderfolgenden Abfragen** liefert (rund 30 s). Bleibt eine Antwort ganz
+aus, hält der Sensor seinen letzten Wert, und die Lücke zählt nicht auf einen
+laufenden Wechsel an. `unavailable` kommt weiterhin ausschließlich vom
+Coordinator, also nach drei komplett unbeantworteten Abfragen.
+
+Das entprellt bewusst den **Wert**, nicht nur die ausbleibende Antwort: Ein
+fehlender Endpunkt wird ohnehin schon weitergetragen, die Ausreißer kommen in
+ansonsten gültigen Antworten an.
+
+## Diagnose
+
+Über **Gerät → Diagnose herunterladen** gibt die Integration die letzte
+Rohantwort jedes Endpunkts aus, unskaliert. Damit lässt sich die häufigste
+offene Frage beantworten, ohne zu raten: ob ein Zähler auf 0 steht, weil das
+Gerät 0 liefert, oder weil die Auswertung danebenliegt. Gerätekennungen
+(BLE-MAC, IP, SSID) werden geschwärzt.
+
+Ein Speicher **ohne eigenen Stromwandler** liefert für `EM.GetStatus`
+erwartungsgemäß durchgehend Nullen – `ct_state: 0`, alle Phasenleistungen und
+beide Zählerstände auf 0. Das ist kein Auswertungsfehler; die Skalierung von
+`input_energy`/`output_energy` (0,1 Wh → kWh) stimmt. Bei einem Gerät *mit*
+Stromwandler zeigt der Diagnose-Dump, was tatsächlich ankommt.
+
 ## Entwicklung
 
 ```bash
@@ -183,8 +294,13 @@ uv pip install -p .venv-ha --prerelease=allow \
 ```
 
 Die Tests decken den UDP-Transport gegen ein simuliertes Gerät (ID-Zuordnung,
-Fremdgeräte-Abwehr, Timeout und Retry) sowie den Coordinator gegen eine echte
-Home-Assistant-Instanz ab (Ausfalltoleranz, Ratenbegrenzung, Sollwert-Dedup).
+Fremdgeräte-Abwehr, Timeout und Retry), den Coordinator gegen eine echte
+Home-Assistant-Instanz (Ausfalltoleranz, Ratenbegrenzung, Sollwert-Dedup), die
+Entprellung der Binary Sensoren, die Temperatur-Skalierung sowie den
+Modbus-Kanal ab. Letzterer wird gegen einen Stub geprüft, und zwar auf die
+Eigenschaften, auf die es ankommt: Die Verbindung wird auch im Fehlerfall
+geschlossen, ein unveränderter Wert öffnet keine, und die Ratenbegrenzung weist
+ab statt einzureihen.
 
 ## Links
 
