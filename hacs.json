@@ -1,5 +1,7 @@
 {
   "name": "Marstek Battery Storage",
   "homeassistant": "2025.5.0",
-  "hacs": "2.0.1"
+  "hacs": "2.0.1",
+  "content_in_root": false,
+  "render_readme": true
 }

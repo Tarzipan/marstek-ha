@@ -46,11 +46,17 @@
         "title": "Marstek options",
         "data": {
           "scan_interval": "Polling interval",
-          "min_write_interval": "Minimum interval between writes"
+          "min_write_interval": "Minimum interval between writes",
+          "modbus_enabled": "Enable Modbus TCP for the power limits",
+          "modbus_port": "Modbus TCP port",
+          "modbus_unit_id": "Modbus unit ID"
         },
         "data_description": {
           "scan_interval": "How often the device is polled. Below 5 s the device starts dropping requests.",
-          "min_write_interval": "Lower bound on the spacing of two ES.SetMode commands. Protects the device when passive setpoints are pushed frequently. 0 disables the limit."
+          "min_write_interval": "Lower bound on the spacing of two ES.SetMode commands. Protects the device when passive setpoints are pushed frequently. 0 disables the limit.",
+          "modbus_enabled": "Adds two entities for the maximum charge and discharge power. They are written over Modbus TCP because the Open API has no command for them; everything else stays on UDP. Careful: the device serves only ONE Modbus session and locks up under frequent access, so no second Modbus integration may talk to it.",
+          "modbus_port": "TCP port of the device's Modbus server (default: 502).",
+          "modbus_unit_id": "Modbus unit / slave ID of the device (default: 1)."
         }
       }
     }
@@ -171,6 +177,12 @@
       },
       "passive_cd_time": {
         "name": "Passive countdown"
+      },
+      "max_charge_power": {
+        "name": "Max charge power"
+      },
+      "max_discharge_power": {
+        "name": "Max discharge power"
       }
     },
     "switch": {

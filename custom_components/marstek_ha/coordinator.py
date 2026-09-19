@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Mapping
 from datetime import timedelta
 import logging
 import time
@@ -15,6 +16,9 @@ from .const import (
     CONF_DEVICE_IP,
     CONF_DEVICE_PORT,
     CONF_MIN_WRITE_INTERVAL,
+    CONF_MODBUS_ENABLED,
+    CONF_MODBUS_PORT,
+    CONF_MODBUS_UNIT_ID,
     CONF_SCAN_INTERVAL,
     DATA_ES_MODE,
     DEFAULT_MIN_WRITE_INTERVAL,
@@ -23,12 +27,25 @@ from .const import (
     DOMAIN,
     ES_MODE_PASSIVE,
     MAX_CONSECUTIVE_FAILURES,
+    MODBUS_DEFAULT_PORT,
+    MODBUS_DEFAULT_UNIT_ID,
     PASSIVE_CD_TIME_DEFAULT,
     PASSIVE_POWER_DEFAULT,
 )
 from .marstek_api import MarstekAPI
+from .modbus import MarstekModbusWriter
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def modbus_signature(options: Mapping[str, Any]) -> tuple[bool, int, int]:
+    """Return the Modbus settings from an options mapping as a comparable tuple."""
+    return (
+        bool(options.get(CONF_MODBUS_ENABLED, False)),
+        int(options.get(CONF_MODBUS_PORT, MODBUS_DEFAULT_PORT)),
+        int(options.get(CONF_MODBUS_UNIT_ID, MODBUS_DEFAULT_UNIT_ID)),
+    )
+
 
 # Config entry carrying its coordinator in runtime_data.
 MarstekConfigEntry = ConfigEntry["MarstekDataUpdateCoordinator"]
@@ -62,6 +79,19 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.passive_power: int = PASSIVE_POWER_DEFAULT
         self.passive_cd_time: int = PASSIVE_CD_TIME_DEFAULT
 
+        # Optional Modbus TCP side channel for the power limit registers, which
+        # the UDP Open API does not expose. None while the option is off, and
+        # deliberately not created lazily: whether the limit entities exist is
+        # decided once, at entry load, rather than mid-session.
+        self._modbus_signature = modbus_signature(entry.options)
+        self.modbus: MarstekModbusWriter | None = None
+        if self._modbus_signature[0]:
+            self.modbus = MarstekModbusWriter(
+                entry.data[CONF_DEVICE_IP],
+                self._modbus_signature[1],
+                self._modbus_signature[2],
+            )
+
         super().__init__(
             hass,
             _LOGGER,
@@ -87,6 +117,15 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self.config_entry.options.get(
             CONF_MIN_WRITE_INTERVAL, DEFAULT_MIN_WRITE_INTERVAL
         )
+
+    @property
+    def modbus_settings_changed(self) -> bool:
+        """Return whether the entry's Modbus options differ from the live ones.
+
+        Whether the limit entities exist at all depends on these, so a change
+        has to reload the entry rather than be applied in place.
+        """
+        return modbus_signature(self.config_entry.options) != self._modbus_signature
 
     @property
     def device_id(self) -> str:
